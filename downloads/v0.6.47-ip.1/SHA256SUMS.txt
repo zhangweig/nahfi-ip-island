@@ -1,0 +1,2 @@
+b9d581ec59a18ff7112b433042b6521e66329a24aac5d8a09800825083f49a36  Nahfi-IP-Island-windows-x64.zip
+5ed106588bc8a0d317d9d193259fc0fd8e31418a00616a4d5cabe5ace03bddd8  Nahfi-IP-Island.exe

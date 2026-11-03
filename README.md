@@ -1,1 +1,170 @@
-# nahfi-ip-island
+# Nahfi IP Island
+
+基于 [岛仔 Daozai](https://github.com/Renly1994/xiaotang-daozai) 的 Windows 灵动岛，增加独立的 **IP Monitor**。沿用 Rust + egui，保留音乐、日程、托盘等原有功能。
+
+## 下载 Windows x64
+
+- [直接下载 EXE](https://raw.githubusercontent.com/zhangweig/nahfi-ip-island/main/downloads/v0.6.47-ip.1/Nahfi-IP-Island.exe)
+- [下载完整 ZIP（含说明和许可证）](https://raw.githubusercontent.com/zhangweig/nahfi-ip-island/main/downloads/v0.6.47-ip.1/Nahfi-IP-Island-windows-x64.zip)
+- [SHA-256 校验文件](downloads/v0.6.47-ip.1/SHA256SUMS.txt)
+
+## IP Monitor 使用
+
+- 默认启用，启动后悬停展开显示 IP 详情；顶部常规药丸增加国旗和两位国家代码。
+- 点击药丸 IP 区域或展开页右上角的 `IP` 可回到详情；`返回`恢复原有功能页。
+- 详情显示公网 IPv4/IPv6、国家、查询路径、检测状态与时间。点击 IP 复制，点击 `刷新`立即检测。
+- 在详情的 `设置` → `IP Monitor` 中配置本机 HTTP / mixed 代理端口，例：Clash 的 `7890`。`0` 表示不指定代理，默认每 60 秒刷新，可配置 15–3600 秒。
+- 请求失败会保留并标记旧结果；更改查询路径会立即清除旧结果。失败后不会从代理回退到直连。
+- 查询在后台线程执行，8 秒超时，不阻塞动画。关闭开关后不再发起新请求；已发出的请求可能在超时前完成，其结果会被丢弃。
+- 极简模式、歌词模式与系统临时通知仍沿用上游的显示优先级；IP 入口位于常规药丸中。
+
+查询使用 `https://ipwho.is/`，每次会向该服务暴露该请求的出口 IP。**结果仅代表访问该查询接口的出口，不代表所有网站的出口，也不是 Clash 当前节点名称。** 国家信息依赖服务商数据库。支持本机 HTTP CONNECT 代理，不支持 SOCKS-only 端口、代理认证或 Clash 控制 API。
+
+## 构建与验证
+
+Windows 安装 Rust stable 和 Visual Studio C++ Build Tools，然后在仓库根目录执行：
+
+```powershell
+cargo test --locked --all-targets --features record -- --test-threads=1
+cargo build --locked --release --bin daozai
+.	arget
+elease\daozai.exe
+```
+
+只验证 IP 功能：`cargo test --locked --lib ip_`。测试使用本地 HTTP 服务，不依赖公网 IP 查询服务；涵盖响应验证、IPv6、请求失败、保留旧结果、布局、配置与面板操作。Linux 可用于编译和无窗口测试，Windows 托盘、开机启动和真实代理出口仍需在 Windows 验证。
+
+## 来源与许可证
+
+上游基线：`Renly1994/xiaotang-daozai`，提交 `0d52f42cacc145d6ec7e32be8414b7944475cd63`（0.6.47）。保留上游 MIT [许可证](LICENSE)和第三方声明。
+
+国旗来自 `country-flag-icons` 1.6.20，按 npm 发布元数据的 SHA-512 验证后打包为本地 SVG，许可见 [assets/flags/LICENSE](assets/flags/LICENSE)。不会额外联网加载国旗。
+
+本分支的更新来源指向 `zhangweig/nahfi-ip-island`，尚未发布版本时“检查更新”可能返回未找到发布版本。下面保留上游文档供参考；其中上游下载链接不包含 IP Monitor。
+
+---
+
+<div align="center">
+<img src="assets/daozai-logo.png" width="112" alt="岛仔" />
+
+# 岛仔 · Daozai
+
+**让重要的信息，轻轻出现在屏幕顶部。**
+
+Windows 桌面伙伴 · 音乐与歌词 · 邮件验证码 · 日程提醒 · AI 额度
+
+[![Release](https://img.shields.io/github/v/release/Renly1994/xiaotang-daozai?color=6d65ff&label=下载)](https://github.com/Renly1994/xiaotang-daozai/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#安装与更新)
+[![License](https://img.shields.io/badge/License-MIT-3cbf91)](LICENSE)
+[![CI](https://github.com/Renly1994/xiaotang-daozai/actions/workflows/ci.yml/badge.svg)](https://github.com/Renly1994/xiaotang-daozai/actions/workflows/ci.yml)
+
+[下载 Windows 版](https://github.com/Renly1994/xiaotang-daozai/releases/latest) · [使用指南](docs/USAGE.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/Renly1994/xiaotang-daozai/issues)
+
+</div>
+
+![收起状态：贴在屏幕顶部的刘海](docs/images/showcase-hero.png)
+
+## 一个小岛，装下桌面上的小事
+
+岛仔贴在屏幕顶部，收起时是一条小刘海。鼠标靠近时展开，离开时收起；需要处理的信息出现时再提醒你。它由 Rust 和 egui 构建，不依赖 Electron。
+
+| 功能 | 可以做什么 |
+| --- | --- |
+| 桌面伙伴 | 会眨眼、打盹、喝水，也会拿起麦克风跟着音乐唱；可切换极简模式 |
+| 音乐与歌词 | 读取 Windows 媒体会话，控制播放、切歌、进度；支持岛上单行歌词 |
+| 专注与饮水 | 专注／休息计时、饮水目标、提醒时段、快捷记录与撤销 |
+| 文件置物架 | 拖入临时收集，打开或定位原文件，拖出到其他应用；移除记录不删除原文件 |
+| 待办 | 添加、编辑、完成任务；用日期和时间选择器设置可选提醒 |
+| 邮件 | 多账号收信、验证码来源识别与点击复制、正文阅读、默认浏览器打开链接 |
+| 日程 | 月历和当日安排；合并工作日历与邮件邀请，支持全天、跨天、重复日程及单次修改／取消 |
+| AI 额度 | Codex、Claude、Kimi、Grok Bot、Gemini；多账号、常驻圆环、重置时间和自选配色 |
+| 系统提示 | 电源、电量、网络、音量、大写锁定、输入语言和蓝牙设备状态 |
+
+### 专注工作，也记得休息和喝水
+
+开始一段专注时间，在专注与休息之间切换；饮水面板记录当天进度，可以设置目标和提醒时段。
+
+![鼠标靠近后展开专注面板](docs/images/showcase-daily.png)
+
+### 待办随手记，文件临时放
+
+把待办加到屏幕顶部，完成后勾选；需要提醒的事项可以单独设置日期和时间。置物架则用来临时收集文件，支持打开、定位原文件和拖出到其他应用。
+
+![从顶部展开待办清单](docs/images/showcase-work.png)
+
+### AI 额度，抬眼就能看见
+
+收起时用圆环显示额度，展开后查看账号与重置时间。支持多账号，可选择常驻展示的服务和配色。
+
+各服务与订阅的连接方式及可用性见下方「连接哪些服务」。
+
+### 邮件和日程，放在同一条时间线上
+
+![日程提醒在屏幕顶部出现](docs/images/showcase-calendar.png)
+
+- 正式日历邀请自动进入日程；普通邮件正文出现日期不会自动创建日程。
+- 可忽略某条邮件日程，停止显示和提醒；邮件保留，可从详情恢复。
+- 滚轮只滚动下方列表；大卡片保持当前选择，点击其他日程才切换详情。
+- 同一场日程使用 UID 与开始时间去重，工作日历和邮件来源可以同时标识。
+
+以上为基于演示界面制作的 AI 产品展示图，展示收起、展开与提醒状态，界面细节以实际版本为准。[查看原始界面截图](docs/images)。
+
+## 安装与更新
+
+1. 前往 [Releases](https://github.com/Renly1994/xiaotang-daozai/releases/latest)，下载安装版 `Daozai-Setup-v0.6.40-x64.exe`。
+2. 双击安装器，可修改安装位置、选择是否创建桌面快捷方式和开机自启，再点击「一键安装」。桌面快捷方式默认勾选，首次安装默认不开机自启；无需解压。
+3. 安装完成后打开「岛仔」，也可从桌面快捷方式启动。在托盘菜单打开设置，选择需要的功能。
+
+需要免安装使用时，下载 `Daozai-v0.6.40-windows-x64.zip` 并完整解压，运行其中的 `daozai.exe`。程序仍默认使用当前用户的应用数据目录。
+
+在「设置 → 关于」点击「检查更新」，可查看最新正式版及更新说明，选择「下载并安装」「浏览器下载」或「稍后」。应用内下载通过校验后会重启更新；也可在发布页下载后再次安装，原设置和记录会保留。卸载可通过 Windows「已安装的应用」完成；卸载同样保留用户数据。详细操作见 [使用指南](docs/USAGE.md)。
+
+**系统要求：** Windows 10／11 x64，支持 OpenGL 的显卡驱动。Windows 11 已进行本机实测；Windows 10、不同显卡及多显示器组合的兼容性仍需更多反馈。暂不提供 macOS、Linux 或 ARM64 成品包。
+
+**校验下载：** Release 附带 `SHA256SUMS.txt`，可用 `Get-FileHash -Algorithm SHA256` 比对。当前程序未做商业代码签名，Windows 可能提示未知发布者；请核对仓库与文件校验值后再决定运行。
+
+## 连接哪些服务
+
+| 类型 | 当前入口 | 说明 |
+| --- | --- | --- |
+| 邮箱 | QQ、163、126、腾讯企业邮、iCloud、Gmail | IMAP；使用服务商要求的授权码或 App 专用密码 |
+| 工作日历 | 飞书、钉钉、企业微信 | CalDAV；需要平台提供的独立日历账号／密码，安装桌面端本身不等于授权 |
+| AI 额度 | Codex、Claude、Kimi、Grok Bot、Gemini | 各服务的本机登录引用或独立连接方式；不同账号与订阅的可用性可能不同 |
+
+QQ 收信、邮件日程和飞书个人日历已进行真实账号测试；钉钉、企业微信已验证接入代码与界面，但尚未在本轮完成真实账号同步验收。不要把图标或模拟日程预览视为实连保证。
+
+## 数据留在什么地方
+
+- 设置、待办、饮水记录、置物路径和连接元数据保存在 `%APPDATA%\Daozai`。
+- 邮箱和日历密码保存在 Windows 凭据管理器；Gemini 会话使用 Windows DPAPI 加密。
+- 读取已有 AI 客户端登录时不回写原客户端配置；不要把授权码、Cookie 或登录 JSON 上传到 Issue。
+- 邮箱读取收件箱，不读取垃圾邮件文件夹；邮件正文在当前进程中用于展示和识别。
+- 开启对应功能后会访问服务商接口和歌词服务，不等于完全离线软件。
+
+完整说明见 [隐私与安全](docs/PRIVACY.md)。
+
+## 从源码构建
+
+需要 Rust stable、MSVC C++ 构建工具和 Windows SDK。开发时建议使用较新的 stable Rust。
+
+```powershell
+rustup default stable-x86_64-pc-windows-msvc
+cargo build --locked --release --bin daozai
+.\target\release\daozai.exe
+```
+
+运行测试及打包：
+
+```powershell
+cargo test --locked --all-targets --features record -- --test-threads=1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
+```
+
+测试按单线程运行，以隔离使用进程环境变量的数据目录测试。低内存设备可设置 `$env:CARGO_BUILD_JOBS = "1"`。打包需要 NSIS 3，可通过 `-NsisCompiler` 指定 `makensis.exe`。发布脚本会检查程序版本和运行库依赖，生成单文件 EXE 安装器、精简免安装 ZIP 和 SHA-256 校验文件。
+
+项目结构、界面预览与贡献方式见 [开发指南](CONTRIBUTING.md)。
+
+## 开源与致谢
+
+岛仔原创代码采用 [MIT License](LICENSE)。Rust 依赖、vendored 代码、第三方图标及品牌标识沿用各自的许可或权利声明；MIT 不授予这些服务的商标使用权，也不代表官方合作或认证。详见 [第三方声明](THIRD_PARTY_NOTICES.txt) 和 [依赖说明](docs/DEPENDENCIES.md)。
+
+感谢 egui／eframe、Rust 社区，以及提供参考与素材的开源项目。
