@@ -3473,12 +3473,13 @@ fn ip_monitor_is_a_regular_page_and_masks_until_explicit_reveal() {
     let mut h=H::new();
     h.app.open_ip_monitor();
     h.app.ip.complete(Ok(crate::ip_monitor::Observation {
-        ip:"203.0.113.7".parse().unwrap(),country_code:"US".into(),country:"United States".into(),checked_at:std::time::SystemTime::now(),
+        source:crate::ip_monitor::Provider::Ipwho,ip:"203.0.113.7".parse().unwrap(),country_code:"US".into(),country:"United States".into(),checked_at:std::time::SystemTime::now(),
     }));
     h.hover(H::local(200.0,40.0),1.0);
     assert_eq!(h.app.page(),crate::app::IP_PAGE);
     let texts=|h:&H|h.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().to_owned()),_=>None}).collect::<Vec<_>>();
     assert!(texts(&h).iter().any(|s|s=="203.***.***.7"));
+    assert!(texts(&h).iter().any(|s|s=="ipwho.is"));
     assert!(!texts(&h).iter().any(|s|s.contains("203.0.113.7")));
     h.click_text("显示");h.frame(vec![]);
     assert!(texts(&h).iter().any(|s|s=="203.0.113.7"));
@@ -3543,7 +3544,7 @@ fn new_pages_remain_interactive_at_high_dpi_and_privacy_resets_on_navigation() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     for scale in [1.0,1.5,2.0,2.5,3.0] {
         let mut h=H::new();h.ctx.set_pixels_per_point(scale);h.app.open_ip_monitor();
-        h.app.ip.complete(Ok(crate::ip_monitor::Observation {ip:"2001:db8::1234".parse().unwrap(),country_code:"US".into(),country:"United States".into(),checked_at:std::time::SystemTime::now()}));
+        h.app.ip.complete(Ok(crate::ip_monitor::Observation {source:crate::ip_monitor::Provider::Ipwho,ip:"2001:db8::1234".parse().unwrap(),country_code:"US".into(),country:"United States".into(),checked_at:std::time::SystemTime::now()}));
         h.hover(H::local(200.0,40.0),1.0);
         assert!(h.hit.contains(H::local(350.0,70.0)),"缩放后 IP 按钮必须仍在命中区");
         h.click_text("显示");assert!(h.app.ip_reveal_until>h.t);
@@ -3621,8 +3622,8 @@ fn computer_page_renders_samples_and_disk_switch_and_low_battery_notifies_once()
 fn reminder_and_route_settings_persist_and_legacy_manual_proxy_stays_manual() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.device_low_battery=false;h.app.settings.device_battery_threshold=30;
-    h.app.settings.ip_follow_system=false;h.app.settings.ip_proxy_port=7890;h.app.settings.save();
-    let s=crate::model::Settings::load();assert!(!s.device_low_battery);assert_eq!(s.device_battery_threshold,30);assert!(!s.ip_follow_system);
+    h.app.settings.ip_follow_system=false;h.app.settings.ip_proxy_port=7890;h.app.settings.ip_source="ipwho".into();h.app.settings.save();
+    let s=crate::model::Settings::load();assert!(!s.device_low_battery);assert_eq!(s.device_battery_threshold,30);assert!(!s.ip_follow_system);assert_eq!(s.ip_source,"ipwho");
     std::fs::write(crate::model::config_dir().join("settings.txt"),"ip_proxy_port=7891\n").unwrap();
     let s=crate::model::Settings::load();assert!(!s.ip_follow_system);assert_eq!(s.ip_proxy_port,7891);
     std::fs::write(crate::model::config_dir().join("settings.txt"),"ip_proxy_port=0\n").unwrap();assert!(crate::model::Settings::load().ip_follow_system);

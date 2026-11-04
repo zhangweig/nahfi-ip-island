@@ -3,8 +3,8 @@ on:
   push:
     branches: [main]
     paths:
-      - downloads/v0.6.51/Nahfi-IP-Island.exe
-      - downloads/v0.6.51/Daozai-v0.6.51-windows-x64.zip
+      - downloads/v0.6.52/Nahfi-IP-Island.exe
+      - downloads/v0.6.52/Daozai-v0.6.52-windows-x64.zip
   workflow_dispatch:
 permissions:
   contents: write
@@ -20,15 +20,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.6.51
+          tag=v0.6.52
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release already exists; keeping its assets unchanged."
             exit 0
           fi
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
-            --title 'Nahfi IP Island v0.6.51 — 修正 Grok Bot 额度请求适配' \
-            --notes-file downloads/v0.6.51/RELEASE_NOTES.md \
-            downloads/v0.6.51/Nahfi-IP-Island.exe \
-            downloads/v0.6.51/Daozai-v0.6.51-windows-x64.zip \
-            downloads/v0.6.51/SHA256SUMS.txt
+            --title 'Nahfi IP Island v0.6.52 — 双 IP 源、键鼠提醒与电脑状态' \
+            --notes-file downloads/v0.6.52/RELEASE_NOTES.md \
+            downloads/v0.6.52/Nahfi-IP-Island.exe \
+            downloads/v0.6.52/Daozai-v0.6.52-windows-x64.zip \
+            downloads/v0.6.52/SHA256SUMS.txt

@@ -42,7 +42,19 @@ impl App {
             ui.add(egui::DragValue::new(&mut self.settings.ip_interval).range(5..=3600));
         });
         ui.label("例如 Clash mixed-port 7890。仅支持本机 HTTP CONNECT，失败不回退直连。");
-        ui.label("查询使用 ipwho.is；结果仅代表该接口的出口，不代表所有网站或节点名称。");
+        let mut provider = crate::ip_monitor::Provider::parse(&self.settings.ip_source);
+        ui.horizontal(|ui| {
+            for p in [
+                crate::ip_monitor::Provider::Auto,
+                crate::ip_monitor::Provider::Cloudflare,
+                crate::ip_monitor::Provider::Ipwho,
+            ] {
+                ui.selectable_value(&mut provider, p, p.label());
+            }
+        });
+        self.settings.ip_source = provider.key().into();
+        ui.label("自动：Cloudflare Trace 优先，ipwho.is 备用；备用保持同一路径，代理失败不直连。遇到限流会冷却重试。");
+        ui.label("每次请求向所选服务提供请求出口 IP；结果不代表所有网站的出口。");
     }
     pub(crate) fn ip_panel(&mut self, c: &Card, cmds: &mut Vec<Cmd>) {
         if !self.settings.ip_enabled {
@@ -77,10 +89,14 @@ impl App {
                 egui::Image::new(image).paint_at(c.ui, c.rect(44.0, 39.0, 24.0, 16.0));
             }
             let country = c.fit(
-                &format!("{} · {}", o.country_code, o.country),
+                &if o.country_code == o.country {
+                    o.country_code.clone()
+                } else {
+                    format!("{} · {}", o.country_code, o.country)
+                },
                 11.0,
                 W::Semibold,
-                298.0,
+                210.0,
             );
             c.text(
                 76.0,
@@ -90,6 +106,15 @@ impl App {
                 W::Semibold,
                 theme::WHITE,
                 H::Left,
+            );
+            c.text(
+                375.0,
+                54.0,
+                o.source.label(),
+                9.0,
+                W::Regular,
+                theme::GRAY,
+                H::Right,
             );
             let shown = if revealed {
                 o.ip.to_string()
@@ -196,7 +221,7 @@ impl App {
             H::Left,
         );
         c.hit(43.0, 84.0, 333.0, 18.0, "ip-status")
-            .on_hover_text(format!("{status}\n仅代表 ipwho.is 查询出口。"));
+            .on_hover_text(format!("{status}\n仅代表当前数据源的请求出口。"));
         c.text(
             375.0,
             120.0,

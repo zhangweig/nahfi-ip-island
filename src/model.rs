@@ -89,6 +89,7 @@ pub struct Settings {
     /// 0 = automatic; otherwise extra zoom relative to Windows DPI.
     pub ui_scale_percent: u32,
     pub ip_enabled: bool,
+    pub ip_source: String,
     pub ip_follow_system: bool,
     pub device_low_battery: bool,
     pub device_battery_threshold: u8,
@@ -130,7 +131,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { ui_scale_percent: 0, ip_enabled: true, ip_follow_system: true, device_low_battery: true, device_battery_threshold: 20, ip_proxy_port: 0, ip_interval: 10, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; crate::app::PAGE_COUNT], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
+        Self { ui_scale_percent: 0, ip_enabled: true, ip_source: "auto".into(), ip_follow_system: true, device_low_battery: true, device_battery_threshold: 20, ip_proxy_port: 0, ip_interval: 10, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; crate::app::PAGE_COUNT], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
     }
 }
 
@@ -145,6 +146,7 @@ impl Settings {
                 "ip_follow_system" => {s.ip_follow_system=v!="0";route_explicit=true;},
                 "device_low_battery" => s.device_low_battery=v!="0",
                 "device_battery_threshold" => s.device_battery_threshold=v.parse::<u8>().unwrap_or(20).clamp(5,50),
+                "ip_source" => s.ip_source=crate::ip_monitor::Provider::parse(&v).key().into(),
                 "ip_enabled" => s.ip_enabled = v != "0",
                 "ip_proxy_port" => s.ip_proxy_port = v.parse().unwrap_or(0),
                 "ip_interval" => s.ip_interval = v.parse::<u32>().unwrap_or(10).clamp(5, 3600),
@@ -205,6 +207,7 @@ impl Settings {
                 ("ip_follow_system".into(),(self.ip_follow_system as u8).to_string()),
                 ("device_low_battery".into(),(self.device_low_battery as u8).to_string()),
                 ("device_battery_threshold".into(),self.device_battery_threshold.to_string()),
+                ("ip_source".into(),self.ip_source.clone()),
                 ("ip_enabled".into(), (self.ip_enabled as u8).to_string()),
                 ("ip_proxy_port".into(), self.ip_proxy_port.to_string()),
                 ("ip_interval".into(), self.ip_interval.to_string()),
