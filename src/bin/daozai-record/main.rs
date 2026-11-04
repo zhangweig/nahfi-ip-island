@@ -447,6 +447,7 @@ fn main() {
             media: media.np.clone(),
             volume: Some((62, false)),
             bt: Vec::new(),
+            computer: Default::default(),
             bt_ready: true,
             usb_ready: false,
         };

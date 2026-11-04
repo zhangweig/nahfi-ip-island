@@ -2,6 +2,19 @@
 
 基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.51**。
 
+## 开发中：电脑状态、设备提醒与 IP 路由
+
+当前功能分支准备了：
+
+- 同级“电脑状态”页：CPU、内存、网卡合计上下行速率及各磁盘剩余空间。
+- 键鼠低电量提醒，可设 5%–50% 阈值；每台设备提醒一次，恢复后才重新提醒。
+- 扩展迈从 A7 V2 Ultra+ / G87 V2、ATK F1 / A9 / X1 / Zero、VXE MAD R、VGN F1 / F2 等明确列出的接收器，仍需实机验证。
+- IP 默认跟随系统代理，TUN 使用系统路由；监测代理/接口变化使旧结果失效并重新检测。
+
+**待完成：用户指定的 `ip.net.coffee` 数据源接入。** 云环境尚未放行该域名，JSON API 与实际响应尚不能确认。代码目前保留原 IP 数据源，尚未生成本次改动的正式发布版。主分支及下载仍为已发布的 0.6.51。
+
+具体支持清单、验证情况和剩余条件见 [本次开发记录](docs/NETWORK_DEVICES_STATUS.md)。
+
 ## 下载 Windows x64
 
 - [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.51/Nahfi-IP-Island.exe)

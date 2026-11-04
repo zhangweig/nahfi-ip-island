@@ -8,6 +8,9 @@
 pub mod ip_monitor;
 mod ip_monitor_ui;
 mod devices_ui;
+pub mod computer_status;
+mod computer_ui;
+mod battery_alert;
 pub mod usb_battery;
 pub mod display;
 pub mod poll_clock;

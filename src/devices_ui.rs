@@ -29,7 +29,7 @@ impl App {
             c.text(
                 44.0,
                 88.0,
-                "支持蓝牙、K75 Lite 和已适配的 VXE R1 接收器",
+                "支持蓝牙及清单中的迈从 / ATK / VXE / VGN / KZZI",
                 10.0,
                 W::Regular,
                 theme::GRAY,
@@ -67,7 +67,7 @@ impl App {
             let value = level
                 .map(|b| format!("{b}%"))
                 .unwrap_or_else(|| "电量未知".into());
-            let color = if level.is_some_and(|b| b <= 20) {
+            let color = if level.is_some_and(|b| b <= self.settings.device_battery_threshold) {
                 theme::YELLOW
             } else {
                 theme::GREEN

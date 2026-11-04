@@ -9,13 +9,37 @@ impl App {
     pub(crate) fn ip_settings(&mut self, ui: &mut egui::Ui) {
         ui.checkbox(&mut self.settings.ip_enabled, "启用 IP Monitor 后台检测");
         ui.label("完整 IP 默认隐藏；主动显示后 10 秒自动隐藏，切页或收起时立即隐藏。");
+        let mut route = if self.settings.ip_follow_system {
+            0
+        } else if self.settings.ip_proxy_port == 0 {
+            1
+        } else {
+            2
+        };
         ui.horizontal(|ui| {
-            ui.label("本机 HTTP / mixed 代理端口（0 = 直连）");
-            ui.add(egui::DragValue::new(&mut self.settings.ip_proxy_port).range(0..=65535));
+            ui.selectable_value(&mut route, 0, "自动跟随系统");
+            ui.selectable_value(&mut route, 1, "系统路由 / TUN");
+            ui.selectable_value(&mut route, 2, "指定代理端口");
         });
+        self.settings.ip_follow_system = route == 0;
+        if route == 1 {
+            self.settings.ip_proxy_port = 0;
+        }
+        if route == 2 && self.settings.ip_proxy_port == 0 {
+            self.settings.ip_proxy_port = 7890;
+        }
+        ui.label(
+            "自动模式跟随 Windows 系统代理；TUN 使用操作系统路由。两种模式出口相同，IP 可能不变。",
+        );
+        if route == 2 {
+            ui.horizontal(|ui| {
+                ui.label("本机 HTTP / mixed 代理端口");
+                ui.add(egui::DragValue::new(&mut self.settings.ip_proxy_port).range(1..=65535));
+            });
+        }
         ui.horizontal(|ui| {
             ui.label("刷新间隔（秒）");
-            ui.add(egui::DragValue::new(&mut self.settings.ip_interval).range(15..=3600));
+            ui.add(egui::DragValue::new(&mut self.settings.ip_interval).range(5..=3600));
         });
         ui.label("例如 Clash mixed-port 7890。仅支持本机 HTTP CONNECT，失败不回退直连。");
         ui.label("查询使用 ipwho.is；结果仅代表该接口的出口，不代表所有网站或节点名称。");
@@ -143,7 +167,11 @@ impl App {
                 H::Left,
             );
         }
-        let route = crate::ip_monitor::Config::from_settings(&self.settings).route();
+        let route = if self.ip_route.is_empty() {
+            crate::ip_monitor::Config::from_settings(&self.settings).route()
+        } else {
+            self.ip_route.clone()
+        };
         let status = if self.ip.refreshing {
             format!("{route} · 检测中")
         } else if let Some(error) = &self.ip.error {

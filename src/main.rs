@@ -54,6 +54,8 @@ struct Shell {
     quota: daozai::quota::Service,
     quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
     quota_at: PollClock,
+    computer_rx: std::sync::mpsc::Receiver<daozai::computer_status::Snapshot>,
+    computer: daozai::computer_status::Snapshot,
     ip_service: daozai::ip_monitor::Service,
     ip_config: Option<daozai::ip_monitor::Config>,
     ip_at: Option<Instant>,
@@ -89,6 +91,8 @@ impl Shell {
         #[cfg(windows)] let system_state=daozai::system::Snapshot::read();
         #[cfg(windows)] let system_rx=daozai::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
         Self {
+            computer_rx: daozai::computer_status::spawn(cc.egui_ctx.clone()),
+            computer: Default::default(),
             ip_service: daozai::ip_monitor::Service::start(cc.egui_ctx.clone()),
             ip_config: None,
             ip_at: None,
@@ -224,6 +228,7 @@ impl Shell {
                 #[cfg(not(windows))] { None }
             },
             bt: self.bt.iter().chain(&self.usb).cloned().collect(),
+            computer: self.computer.clone(),
             bt_ready: self.bt_ready,
             usb_ready: self.usb_ready,
         }
@@ -250,7 +255,11 @@ impl eframe::App for Shell {
             // 切到别的程序：收起，并在光标离开前不再自动展开
             self.app.foreground_changed();
         }
-        let config = daozai::ip_monitor::Config::from_settings(&self.app.settings);
+        while let Ok(sample)=self.computer_rx.try_recv(){self.computer=sample;}
+        let mut config = daozai::ip_monitor::Config::from_settings(&self.app.settings);
+        config.network_tag=self.computer.route_hash;
+        config.system_proxy=self.computer.system_proxy.clone();
+        self.app.ip_route=config.route();
         if self.ip_config.as_ref() != Some(&config) {
             self.ip_config = Some(config.clone());
             self.ip_at = None;
@@ -259,7 +268,7 @@ impl eframe::App for Shell {
         if let Some((finished, result)) = self.ip_service.poll() {
             if finished == config { self.app.ip.complete(result); }
         }
-        if config.enabled && (self.app.ip_refresh || self.ip_at.is_none_or(|at| at.elapsed() >= Duration::from_secs(config.interval as u64))) {
+        if config.enabled && self.computer.sampled_at.is_some() && (self.app.ip_refresh || self.ip_at.is_none_or(|at| at.elapsed() >= Duration::from_secs(if self.app.page()==daozai::app::IP_PAGE {config.interval.min(10)}else{config.interval} as u64))) {
             if self.ip_service.refresh(config.clone()) {
                 self.app.ip.refreshing = true;
                 self.app.ip_refresh = false;

@@ -258,6 +258,7 @@ struct H {
     animating:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
     bt: Vec<crate::bt::Device>,
+    computer: crate::computer_status::Snapshot,
     bt_ready: bool,
     usb_ready: bool,
     media: crate::smtc::NowPlaying,
@@ -276,7 +277,7 @@ impl H {
         std::env::set_var("DAOZAI_DATA_DIR", &dir);
         let ctx = egui::Context::default();
         let app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 1e9 });
-        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,animating:false,shapes:Vec::new(), bt:Vec::new(),bt_ready:true,usb_ready:false,media:Default::default(),power:(None,false),network:None,system_idle:None,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
+        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,animating:false,shapes:Vec::new(), bt:Vec::new(),computer:Default::default(),bt_ready:true,usb_ready:false,media:Default::default(),power:(None,false),network:None,system_idle:None,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
     }
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
@@ -296,6 +297,7 @@ impl H {
             date: "10月28日 周三".into(),
             cursor: self.cursor,
             bt: self.bt.clone(),
+            computer: self.computer.clone(),
             bt_ready: self.bt_ready,
             usb_ready: self.usb_ready,
             media:self.media.clone(),
@@ -1172,7 +1174,7 @@ fn wheel_navigation_reaches_every_page_in_both_directions(){
     h.app.shelf.items.clear();h.app.todos.items.clear();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.hover(H::local(210.0,18.0),0.3);
-    for (delta,pages) in [(-40.0,[1,2,3,4,5,6,7,8,9,0]),(40.0,[9,8,7,6,5,4,3,2,1,0])] {
+    for (delta,pages) in [(-40.0,[1,2,3,4,5,6,7,8,9,10,0]),(40.0,[10,9,8,7,6,5,4,3,2,1,0])] {
         for page in pages {
             h.wheel(delta);
             assert_eq!(h.app.page,page,"滚轮翻页不能被空的置物架或待办卡住");
@@ -1210,9 +1212,9 @@ fn wheel_handles_small_deltas_without_skipping_pages_on_bursts(){
 }
 
 #[test]
-fn navigation_wraps_between_ten_pages_and_notification_settings_remain_accessible() {
+fn navigation_wraps_between_eleven_pages_and_notification_settings_remain_accessible() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,9);
+    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,10);
     h.hover(H::local(300.0,60.0),0.8);h.click(H::local(398.0,68.0));assert_eq!(h.app.page,0);
     h.app.open_settings_category(3);assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,6);
 }
@@ -1362,7 +1364,7 @@ fn quota_accounts_switch_independently_and_hide_with_the_page() {
 fn page_visibility_is_saved_and_sets_the_starting_page() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    assert_eq!(h.app.settings.visible_pages,[true;10]);
+    assert_eq!(h.app.settings.visible_pages,[true;11]);
     assert!(h.app.settings.show_battery);
     h.app.settings.show_battery=false;
     h.app.set_page_visible(0,false);
@@ -1370,17 +1372,17 @@ fn page_visibility_is_saved_and_sets_the_starting_page() {
     h.app.settings.save();
     let settings=crate::model::Settings::load();
     assert!(!settings.show_battery);
-    assert_eq!(settings.visible_pages,[false,true,true,false,true,true,true,true,true,true]);
+    assert_eq!(settings.visible_pages,[false,true,true,false,true,true,true,true,true,true,true]);
     let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
     assert_eq!(restarted.page(),1);
     assert_eq!(restarted.settings.visible_pages,settings.visible_pages);
     assert!(!restarted.settings.show_battery);
     std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=000000\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[true,false,false,false,false,false,false,false,false,false]);
+    assert_eq!(crate::model::Settings::load().visible_pages,[true,false,false,false,false,false,false,false,false,false,false]);
     std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=1000000\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[true,false,false,false,false,false,false,true,true,true],"旧版页面开关应保留，并开启新增的日程页");
+    assert_eq!(crate::model::Settings::load().visible_pages,[true,false,false,false,false,false,false,true,true,true,true],"旧版页面开关应保留，并开启新增的日程页");
     std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=invalid\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[true;10]);
+    assert_eq!(crate::model::Settings::load().visible_pages,[true;11]);
 }
 
 #[test]
@@ -1420,7 +1422,7 @@ fn battery_module_can_disable_only_the_power_warning() {
 fn page_visibility_skips_hidden_pages_in_every_navigation_control() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    for page in [1,3,4,6,7,8,9] {h.app.set_page_visible(page,false);}
+    for page in [1,3,4,6,7,8,9,10] {h.app.set_page_visible(page,false);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     for expected in [2,5,0] {
         h.click(H::local(398.0,68.0));
@@ -1449,7 +1451,7 @@ fn page_visibility_moves_away_from_hidden_page_and_keeps_one_page() {
     h.app.set_page_visible(4,false);
     assert_eq!(h.app.page,0);
     assert!(!h.app.is_editing());
-    for page in [0,1,3,5,6,7,8,9] {h.app.set_page_visible(page,false);}
+    for page in [0,1,3,5,6,7,8,9,10] {h.app.set_page_visible(page,false);}
     assert_eq!(h.app.page,2);
     h.app.set_page_visible(2,false);
     assert!(h.app.settings.visible_pages[2],"不能关闭最后一个页面");
@@ -3290,13 +3292,13 @@ fn calendar_sync_result_does_not_enqueue_another_sync() {
 fn page_order_persists_and_controls_navigation() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    h.app.settings.page_order=[5,2,0,1,3,4,6,7,8,9];
+    h.app.settings.page_order=[5,2,0,1,3,4,6,7,8,9,10];
     h.app.settings.save();
     let settings=crate::model::Settings::load();
-    assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7,8,9]);
+    assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7,8,9,10]);
     let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
     assert_eq!(restarted.page(),5);
-    for page in [1,3,4,6,7,8,9] {h.app.set_page_visible(page,false);}
+    for page in [1,3,4,6,7,8,9,10] {h.app.set_page_visible(page,false);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     for expected in [5,2,0] {
         h.click(H::local(398.0,68.0));
@@ -3309,7 +3311,7 @@ fn page_order_persists_and_controls_navigation() {
     assert_eq!(h.app.page,5);
     for invalid in ["0,0,1,2,3,4,5,6","8,1,2,3,4,5,6,7","0,1","invalid"] {
         std::fs::write(crate::model::config_dir().join("settings.txt"),format!("page_order={invalid}\n")).unwrap();
-        assert_eq!(crate::model::Settings::load().page_order,[0,1,2,3,4,5,6,7,8,9]);
+        assert_eq!(crate::model::Settings::load().page_order,[0,1,2,3,4,5,6,7,8,9,10]);
     }
 }
 
@@ -3336,9 +3338,9 @@ fn page_order_drag_applies_on_release_and_saves() {
     draw(&mut h,vec![egui::Event::PointerMoved(from),button(from,true)]);
     draw(&mut h,vec![egui::Event::PointerMoved(from+egui::vec2(0.0,10.0))]);
     draw(&mut h,vec![egui::Event::PointerMoved(to)]);
-    assert_eq!(h.app.settings.page_order,[0,1,2,3,4,5,6,7,8,9]);
+    assert_eq!(h.app.settings.page_order,[0,1,2,3,4,5,6,7,8,9,10]);
     draw(&mut h,vec![button(to,false)]);
-    assert_eq!(h.app.settings.page_order,[1,2,0,3,4,5,6,7,8,9]);
+    assert_eq!(h.app.settings.page_order,[1,2,0,3,4,5,6,7,8,9,10]);
     assert_eq!(crate::model::Settings::load().page_order,h.app.settings.page_order);
 }
 
@@ -3362,7 +3364,7 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                 viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(1.0),..Default::default()})).collect(),..Default::default()};
             *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
         });
-        for tab in 0..14 {
+        for tab in 0..crate::extras::SETTINGS_TITLES.len() {
             h.app.settings_tab=tab;
             for frame in 0..3 {
                 h.ctx.data_mut(|d|d.insert_temp(egui::Id::new("settings-system-theme"),(std::time::Instant::now(),system)));
@@ -3526,12 +3528,12 @@ fn old_eight_page_settings_migrate_without_losing_order_and_scale_persists() {
     std::fs::create_dir_all(crate::model::config_dir()).unwrap();
     std::fs::write(crate::model::config_dir().join("settings.txt"),"page_order=5,2,0,1,3,4,6,7\nvisible_pages=10111111\nui_scale_percent=150\n").unwrap();
     let settings=crate::model::Settings::load();
-    assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7,8,9]);
-    assert_eq!(settings.visible_pages,[true,false,true,true,true,true,true,true,true,true]);
+    assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7,8,9,10]);
+    assert_eq!(settings.visible_pages,[true,false,true,true,true,true,true,true,true,true,true]);
     assert_eq!(settings.ui_scale_percent,150);
     h.app.settings=settings;h.app.settings.save();
     assert_eq!(crate::model::Settings::load().ui_scale_percent,150);
-    h.app.settings.page_order=[0,1,2,3,4,5,6,7,8,9];
+    h.app.settings.page_order=[0,1,2,3,4,5,6,7,8,9,10];
     h.app.show_page(7);h.hover(H::local(200.0,40.0),1.0);h.click(H::local(398.0,68.0));assert_eq!(h.app.page(),8);
     h.hover(H::local(200.0,40.0),0.7);h.click(H::local(398.0,68.0));assert_eq!(h.app.page(),9);
 }
@@ -3595,4 +3597,33 @@ fn device_and_ip_settings_are_clickable_from_music_settings_at_each_dpi() {
         click(&mut h,scale,"键鼠电量");assert_eq!(h.app.settings_tab,12);
         click(&mut h,scale,"音乐与歌词");assert_eq!(h.app.settings_tab,1);
     }
+}
+
+#[test]
+fn computer_page_renders_samples_and_disk_switch_and_low_battery_notifies_once() {
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.show_page(crate::app::COMPUTER_PAGE);h.hover(H::local(200.0,40.0),1.0);
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="正在采样电脑状态…")));
+    h.computer=crate::computer_status::Snapshot{cpu:Some(42.0),total_memory:16*1024*1024*1024,used_memory:8*1024*1024*1024,down:Some(1048576.0),up:Some(1024.0),disks:vec![crate::computer_status::Disk{label:"C:".into(),total:100,available:40},crate::computer_status::Disk{label:"D:".into(),total:200,available:60}],sampled_at:Some(std::time::SystemTime::now()),..Default::default()};
+    h.frame(vec![]);assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="CPU 42%")));
+    h.click_text("下一盘");assert_eq!(h.app.computer_disk,1);
+    h.app.show_page(crate::app::DEVICES_PAGE);
+    h.bt=vec![crate::bt::Device{id:"low-device".into(),name:"Test Device".into(),battery:Some(10),kind:crate::bt::DeviceKind::Mouse}];
+    h.frame(vec![]);
+    let notices=|h:&H|h.cmds.iter().filter(|c|matches!(c,crate::app::Cmd::Notify(t,_) if t=="键鼠电量偏低")).count();
+    assert_eq!(notices(&h),1);h.frame(vec![]);assert_eq!(notices(&h),1);
+    h.bt[0].battery=None;h.frame(vec![]);h.bt[0].battery=Some(9);h.frame(vec![]);assert_eq!(notices(&h),1);
+    h.app.settings.notifications=false;h.frame(vec![]);assert_eq!(notices(&h),1);
+    h.app.settings.notifications=true;h.frame(vec![]);assert_eq!(notices(&h),2);
+}
+
+#[test]
+fn reminder_and_route_settings_persist_and_legacy_manual_proxy_stays_manual() {
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
+    h.app.settings.device_low_battery=false;h.app.settings.device_battery_threshold=30;
+    h.app.settings.ip_follow_system=false;h.app.settings.ip_proxy_port=7890;h.app.settings.save();
+    let s=crate::model::Settings::load();assert!(!s.device_low_battery);assert_eq!(s.device_battery_threshold,30);assert!(!s.ip_follow_system);
+    std::fs::write(crate::model::config_dir().join("settings.txt"),"ip_proxy_port=7891\n").unwrap();
+    let s=crate::model::Settings::load();assert!(!s.ip_follow_system);assert_eq!(s.ip_proxy_port,7891);
+    std::fs::write(crate::model::config_dir().join("settings.txt"),"ip_proxy_port=0\n").unwrap();assert!(crate::model::Settings::load().ip_follow_system);
 }

@@ -25,8 +25,9 @@ pub const PH: f32 = 140.0; // 展开面板高
 pub(crate) const CALENDAR_PAGE: usize = 7;
 pub const DEVICES_PAGE: usize = 8;
 pub const IP_PAGE: usize = 9;
-pub const PAGE_COUNT: usize = 10;
-const PAGE_SETTINGS: [usize; PAGE_COUNT] = [1,2,3,5,4,7,11,8,12,13];
+pub const COMPUTER_PAGE: usize = 10;
+pub const PAGE_COUNT: usize = 11;
+const PAGE_SETTINGS: [usize; PAGE_COUNT] = [1,2,3,5,4,7,11,8,12,13,14];
 pub(crate) const CALENDAR_H: f32 = 216.0;
 pub const BAR_W: f32 = 163.0; // 收起药丸宽
 pub const BAR_H: f32 = 30.0; // 收起药丸高
@@ -42,7 +43,7 @@ pub const RAD: f32 = 33.0; // 底部圆角
 pub const WIN_W: f32 = 640.0; // 窗口（透明画布）
 pub const CANVAS_W: f32 = WIN_W + 640.0; // 为右侧通知预留透明画布，原岛仍按 WIN_W 定位。
 pub const WIN_H: f32 = 270.0;
-pub(crate) const PAGE_NAMES: [&str; PAGE_COUNT] = ["音乐", "专注", "饮水", "置物架", "待办", "邮箱", "AI 额度", "日程", "键鼠电量", "IP Monitor"];
+pub(crate) const PAGE_NAMES: [&str; PAGE_COUNT] = ["音乐", "专注", "饮水", "置物架", "待办", "邮箱", "AI 额度", "日程", "键鼠电量", "IP Monitor", "电脑状态"];
 
 // ---------- 动效参数 ----------
 /// 悬停意图缓冲：光标停留这么久才真正展开（期间药丸轻微胀大作为反馈），防误触。
@@ -97,6 +98,7 @@ pub struct Env {
     /// 已连接的蓝牙音频设备（名称 + 可选电量）。
     pub bt: Vec<crate::bt::Device>,
     /// 蓝牙服务是否已经完成首次扫描。
+    pub computer: crate::computer_status::Snapshot,
     pub bt_ready: bool,
     pub usb_ready: bool,
 }
@@ -302,6 +304,9 @@ pub struct App {
     pub settings: model::Settings,
     pub ip: crate::ip_monitor::State,
     pub ip_refresh: bool,
+    pub ip_route: String,
+    pub(crate) computer_disk: usize,
+    battery_alerts: crate::battery_alert::Monitor,
     pub(crate) ip_reveal_until: f64,
     pub(crate) devices_first: usize,
     pub(crate) todos: model::TodoList,
@@ -448,6 +453,9 @@ impl App {
             settings,
             ip: Default::default(),
             ip_refresh: false,
+            ip_route: String::new(),
+            computer_disk: 0,
+            battery_alerts: Default::default(),
             ip_reveal_until: 0.0,
             devices_first: 0,
             todos: model::TodoList::load(),
@@ -1139,6 +1147,9 @@ impl App {
         if !self.open { self.ip_reveal_until = 0.0; }
         self.tick(env, dt, elapsed);
         self.sync_device(env);
+        for (name,level) in self.battery_alerts.update(&env.bt,self.settings.device_low_battery && self.settings.notifications,self.settings.device_battery_threshold) {
+            self.alert("键鼠电量偏低",format!("{name} · 剩余 {level}%"),DEVICES_PAGE,true);
+        }
         self.tick_alerts();
         let hud_active=self.notice.clone();
         if hud_active.as_ref().map(|a|&a.title)!=self.hud_notice.as_ref().map(|a|&a.title)||hud_active.is_none(){self.notice_details=false;}
@@ -1648,6 +1659,7 @@ impl App {
             0 | CALENDAR_PAGE => return,
             DEVICES_PAGE => ("键鼠", "电量", theme::GREEN),
             IP_PAGE => ("IP ", "Monitor", theme::CYAN),
+            COMPUTER_PAGE => ("电脑", "状态", theme::CYAN),
             1 => ("番茄", "专注", theme::RED_TOP),
             2 => ("饮水", "提醒", theme::BLUE),
             3 => ("置物架", "", theme::WHITE),
@@ -1713,6 +1725,7 @@ impl App {
             CALENDAR_PAGE => self.page_calendar(c,env),
             DEVICES_PAGE => self.page_devices(c,env),
             IP_PAGE => self.ip_panel(c,cmds),
+            COMPUTER_PAGE => self.page_computer(c,env),
             _ => self.page_settings(c),
         }
     }

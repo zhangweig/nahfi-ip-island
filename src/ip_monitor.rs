@@ -9,9 +9,26 @@ use std::{
 /// Screenshot-safe display; full addresses are only exposed by explicit UI actions.
 pub fn masked_ip(ip: IpAddr) -> String {
     match ip {
-        IpAddr::V4(ip) => { let b=ip.octets(); format!("{}.***.***.{}",b[0],b[3]) },
-        IpAddr::V6(ip) => format!("{:x}:****:****:****",ip.segments()[0]),
+        IpAddr::V4(ip) => {
+            let b = ip.octets();
+            format!("{}.***.***.{}", b[0], b[3])
+        }
+        IpAddr::V6(ip) => format!("{:x}:****:****:****", ip.segments()[0]),
     }
+}
+
+pub(crate) fn system_proxy() -> Option<String> {
+    [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ]
+    .iter()
+    .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()))
+    .or_else(crate::quota::system_proxy)
 }
 
 pub const ENDPOINT: &str = "https://ipwho.is/";
@@ -19,6 +36,9 @@ pub const ENDPOINT: &str = "https://ipwho.is/";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub enabled: bool,
+    pub follow_system: bool,
+    pub system_proxy: Option<String>,
+    pub network_tag: u64,
     pub proxy_port: u16,
     pub interval: u32,
 }
@@ -26,13 +46,22 @@ impl Config {
     pub fn from_settings(s: &crate::model::Settings) -> Self {
         Self {
             enabled: s.ip_enabled,
+            follow_system: s.ip_follow_system,
+            system_proxy: None,
+            network_tag: 0,
             proxy_port: s.ip_proxy_port,
-            interval: s.ip_interval.clamp(15, 3600),
+            interval: s.ip_interval.clamp(5, 3600),
         }
     }
     pub fn route(&self) -> String {
-        if self.proxy_port == 0 {
-            "直连请求（未指定代理）".into()
+        if self.follow_system {
+            if self.system_proxy.is_some() {
+                "跟随系统代理".into()
+            } else {
+                "系统路由（可含 TUN）".into()
+            }
+        } else if self.proxy_port == 0 {
+            "系统路由（不指定代理）".into()
         } else {
             format!("HTTP 代理 127.0.0.1:{}", self.proxy_port)
         }
@@ -109,19 +138,31 @@ fn query(config: &Config, endpoint: &str) -> Result<Observation, String> {
         .try_proxy_from_env(false)
         .timeout(Duration::from_secs(8))
         .redirects(0);
-    if config.proxy_port != 0 {
-        let proxy = ureq::Proxy::new(format!("http://127.0.0.1:{}", config.proxy_port))
-            .map_err(|_| "代理配置无效")?;
+    let proxy_url = if config.follow_system {
+        config.system_proxy.clone()
+    } else if config.proxy_port > 0 {
+        Some(format!("http://127.0.0.1:{}", config.proxy_port))
+    } else {
+        None
+    };
+    if let Some(url) = proxy_url {
+        let proxy = ureq::Proxy::new(url).map_err(|_| "代理配置无效")?;
         builder = builder.proxy(proxy);
     }
-    let response = builder.build().get(endpoint).call().map_err(|_| {
-        if config.proxy_port == 0 {
-            "直连 IP 查询失败，请检查网络或服务可用性"
-        } else {
-            "代理 IP 查询失败，请检查本地 HTTP/mixed 端口；未回退直连"
-        }
-        .to_string()
-    })?;
+    let response = builder
+        .build()
+        .get(endpoint)
+        .set("Cache-Control", "no-cache, no-store")
+        .set("Pragma", "no-cache")
+        .call()
+        .map_err(|_| {
+            if config.proxy_port == 0 {
+                "IP 查询失败，请检查当前系统路由或代理"
+            } else {
+                "代理 IP 查询失败，请检查本地 HTTP/mixed 端口；未回退直连"
+            }
+            .to_string()
+        })?;
     let mut body = String::new();
     response
         .into_reader()
@@ -227,6 +268,9 @@ mod tests {
         });
         let mut config = Config {
             enabled: true,
+            follow_system: false,
+            system_proxy: None,
+            network_tag: 0,
             proxy_port: 0,
             interval: 60,
         };
@@ -266,10 +310,57 @@ mod tests {
         });
         let config = Config {
             enabled: true,
+            follow_system: false,
+            system_proxy: None,
+            network_tag: 0,
             proxy_port: port,
             interval: 60,
         };
         assert!(query(&config, ENDPOINT).unwrap_err().contains("未回退直连"));
         server.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+    #[test]
+    fn automatic_route_changes_invalidate_results_without_claiming_direct() {
+        let mut s = crate::model::Settings::default();
+        let mut a = Config::from_settings(&s);
+        assert!(a.follow_system);
+        assert!(a.route().contains("系统路由"));
+        a.system_proxy = Some("http://127.0.0.1:7890".into());
+        assert!(a.route().contains("系统代理"));
+        let mut b = a.clone();
+        b.network_tag = 42;
+        assert_ne!(a, b);
+        b.system_proxy = None;
+        assert_ne!(a, b);
+        s.ip_follow_system = false;
+        s.ip_proxy_port = 7891;
+        let c = Config::from_settings(&s);
+        assert!(c.route().contains("7891"));
+    }
+    #[test]
+    fn automatic_proxy_is_used_for_the_actual_request() {
+        use std::{io::Write, net::TcpListener};
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = std::thread::spawn(move || {
+            let (mut h, _) = listener.accept().unwrap();
+            h.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut bytes = [0u8; 4096];
+            let n = h.read(&mut bytes).unwrap();
+            assert!(String::from_utf8_lossy(&bytes[..n]).starts_with("CONNECT ipwho.is:443"));
+            h.write_all(
+                b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        });
+        let mut c = Config::from_settings(&crate::model::Settings::default());
+        c.system_proxy = Some(format!("http://127.0.0.1:{port}"));
+        assert!(query(&c, ENDPOINT).is_err());
+        worker.join().unwrap();
     }
 }

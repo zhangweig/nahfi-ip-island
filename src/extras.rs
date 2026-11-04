@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn settings_groups_keep_every_page_reachable() {
-        let groups = ["常规", "音乐与歌词", "专注与饮水", "专注与饮水", "待办与置物", "待办与置物", "通知、邮箱与日程", "通知、邮箱与日程", "通知、邮箱与日程", "关于", "页面管理", "AI 额度", "设备与 IP", "设备与 IP"];
+        let groups = ["常规", "音乐与歌词", "专注与饮水", "专注与饮水", "待办与置物", "待办与置物", "通知、邮箱与日程", "通知、邮箱与日程", "通知、邮箱与日程", "关于", "页面管理", "AI 额度", "设备与 IP", "设备与 IP", "设备与 IP"];
         assert_eq!(groups.len(),SETTINGS_TITLES.len());
         for (_,start,end) in SETTINGS_GROUPS {assert!(start<=end && end<SETTINGS_TITLES.len());}
         for (tab, expected) in groups.iter().enumerate() {
@@ -764,11 +764,11 @@ fn setting_choices(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;3],uni
         });
     });
 }
-const SETTINGS_TITLES: [&str;14] = ["常规","音乐与歌词","专注","饮水","待办","置物","通知","邮箱","日程","关于","页面管理","AI 额度","键鼠电量","IP Monitor"];
+pub(crate) const SETTINGS_TITLES: [&str;15] = ["常规","音乐与歌词","专注","饮水","待办","置物","通知","邮箱","日程","关于","页面管理","AI 额度","键鼠电量","IP Monitor","电脑状态"];
 
 const SETTINGS_GROUPS: [(&str,usize,usize);9] = [
     ("常规",0,0), ("页面管理",10,10), ("音乐与歌词",1,1), ("专注与饮水",2,3),
-    ("待办与置物",4,5), ("通知、邮箱与日程",6,8), ("AI 额度",11,11), ("设备与 IP",12,13), ("关于",9,9),
+    ("待办与置物",4,5), ("通知、邮箱与日程",6,8), ("AI 额度",11,11), ("设备与 IP",12,14), ("关于",9,9),
 ];
 
 impl App {
@@ -859,9 +859,13 @@ impl App {
                 egui::ScrollArea::vertical().id_salt(("settings-scroll",self.settings_tab)).auto_shrink([false,false]).show(ui,|ui|{
                     match self.settings_tab {
                     11=>self.quota_settings(ui),
+                    14=>{settings_label(ui,"电脑状态");settings_card(ui,|ui|{ui.label("后台显示 CPU、内存、网卡合计速率和各磁盘剩余空间，每 2 秒采样。");ui.label("不读取进程列表或个人文件；温度与 GPU 数据暂未接入。");});}
                     12=>{
                         settings_label(ui,"键鼠电量");
                         settings_card(ui,|ui|{
+                            ui.checkbox(&mut self.settings.device_low_battery,"启用键鼠低电量提醒");
+                            ui.horizontal(|ui|{ui.label("提醒阈值（%）");ui.add(egui::DragValue::new(&mut self.settings.device_battery_threshold).range(5..=50));});
+                            ui.label("每台设备低电量只提醒一次，恢复到阈值以上 5% 后重新启用；休眠和未知电量不误报。");
                             ui.label("支持蓝牙键鼠，以及 KZZI K75 Lite / 已匹配 VXE R1 系列 USB 接收器。");
                             ui.label("百分比取决于 Windows 和设备是否上报；未上报时显示未知，不推测电量。");
                             ui.label("USB 接收器每 15 秒查询；休眠、驱动占用或不匹配时显示未知。K75 Lite 电量适配为实验性。");
@@ -881,7 +885,7 @@ impl App {
                         });
                         settings_label(ui,"功能页面");
                         settings_card(ui,|ui|{
-                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","饮水记录与提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程","蓝牙键盘、鼠标电量百分比","公网 IP、出口国家与隐私保护"];
+                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","饮水记录与提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程","蓝牙键盘、鼠标电量百分比","公网 IP、出口国家与隐私保护","CPU、内存、网速与磁盘剩余空间"];
                             ui.label(egui::RichText::new("拖动左侧手柄调整顺序，松开后自动应用到岛。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             #[derive(Clone)]
                             struct PageDrag(usize);

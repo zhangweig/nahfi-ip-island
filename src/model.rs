@@ -89,6 +89,9 @@ pub struct Settings {
     /// 0 = automatic; otherwise extra zoom relative to Windows DPI.
     pub ui_scale_percent: u32,
     pub ip_enabled: bool,
+    pub ip_follow_system: bool,
+    pub device_low_battery: bool,
+    pub device_battery_threshold: u8,
     /// 0 = direct; otherwise an HTTP CONNECT proxy on loopback.
     pub ip_proxy_port: u16,
     pub ip_interval: u32,
@@ -127,20 +130,24 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { ui_scale_percent: 0, ip_enabled: true, ip_proxy_port: 0, ip_interval: 60, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; crate::app::PAGE_COUNT], page_order: [0,1,2,3,4,5,6,7,8,9], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
+        Self { ui_scale_percent: 0, ip_enabled: true, ip_follow_system: true, device_low_battery: true, device_battery_threshold: 20, ip_proxy_port: 0, ip_interval: 10, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; crate::app::PAGE_COUNT], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
     }
 }
 
 impl Settings {
     pub fn load() -> Self {
         let mut s = Self::default();
+        let mut route_explicit=false;
         for (k, v) in read_kv(&config_dir().join("settings.txt")) {
             match k.as_str() {
                 "settings_theme" => s.settings_theme=crate::settings_theme::SettingsTheme::parse(&v),
                 "ui_scale_percent" => s.ui_scale_percent = v.parse::<u32>().ok().map(|n|if n==0{0}else{n.clamp(75,250)}).unwrap_or(0),
+                "ip_follow_system" => {s.ip_follow_system=v!="0";route_explicit=true;},
+                "device_low_battery" => s.device_low_battery=v!="0",
+                "device_battery_threshold" => s.device_battery_threshold=v.parse::<u8>().unwrap_or(20).clamp(5,50),
                 "ip_enabled" => s.ip_enabled = v != "0",
                 "ip_proxy_port" => s.ip_proxy_port = v.parse().unwrap_or(0),
-                "ip_interval" => s.ip_interval = v.parse::<u32>().unwrap_or(60).clamp(15, 3600),
+                "ip_interval" => s.ip_interval = v.parse::<u32>().unwrap_or(10).clamp(5, 3600),
                 "pet" => s.pet = v == "1" || v.eq_ignore_ascii_case("true"),
                 "minimal" => s.minimal = v == "1" || v.eq_ignore_ascii_case("true"),
                 "browser_minimal" => s.browser_minimal = v == "1",
@@ -185,6 +192,7 @@ impl Settings {
                 _ => {}
             }
         }
+        if !route_explicit && s.ip_proxy_port>0 {s.ip_follow_system=false;}
         if !s.visible_pages.contains(&true) { s.visible_pages[0]=true; }
         s
     }
@@ -194,6 +202,9 @@ impl Settings {
             &config_dir().join("settings.txt"),
             &[
                 ("ui_scale_percent".into(), self.ui_scale_percent.to_string()),
+                ("ip_follow_system".into(),(self.ip_follow_system as u8).to_string()),
+                ("device_low_battery".into(),(self.device_low_battery as u8).to_string()),
+                ("device_battery_threshold".into(),self.device_battery_threshold.to_string()),
                 ("ip_enabled".into(), (self.ip_enabled as u8).to_string()),
                 ("ip_proxy_port".into(), self.ip_proxy_port.to_string()),
                 ("ip_interval".into(), self.ip_interval.to_string()),
