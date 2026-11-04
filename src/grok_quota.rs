@@ -117,19 +117,13 @@ fn http_error(error:ureq::Error)->(String,u64){match error{
     ureq::Error::Status(code,_)=>(format!("Grok Bot 额度服务暂不可用（{code}）"),60),
     _=>("无法连接 Grok Bot，请检查网络或代理".into(),30),
 }}
-fn checksum(machine:&str,millis:i64)->String{
-    let stamp=(millis/1_000_000) as u32;
-    // 与客户端 JavaScript 的移位规则一致：移位数按 32 取模。
-    let mut bytes=[(stamp>>8) as u8,stamp as u8,(stamp>>24) as u8,(stamp>>16) as u8,(stamp>>8) as u8,stamp as u8];
-    let mut previous=165;
-    for (i,byte) in bytes.iter_mut().enumerate(){*byte=(*byte^previous).wrapping_add(i as u8);previous=*byte;}
-    format!("{}{machine}",URL_SAFE_NO_PAD.encode(bytes))
-}
+// Grok Bot's documented community request contract omits x-cursor-checksum.
+// A request UUID is not the client's machine identity and must not be used as one.
 fn usage_request(agent:&ureq::Agent,url:&str,token:&str)->Result<ureq::Response,ureq::Error>{
     let request_id=uuid();
     agent.post(url).set("Authorization",&format!("Bearer {token}")).set("Content-Type","application/json").set("Accept","application/json")
         .set("Connect-Protocol-Version","1").set("x-cursor-client-type","sand").set("x-cursor-client-version","0.1.0")
-        .set("x-cursor-checksum",&checksum(&request_id,chrono::Utc::now().timestamp_millis())).set("x-request-id",&request_id)
+        .set("x-request-id",&request_id)
         .set("x-sand-box-namespace","prod").set("x-ghost-mode","true").send_string("{}")
 }
 fn renew(agent:&ureq::Agent,old:&Session)->Result<Session,String>{
@@ -255,10 +249,6 @@ mod tests {
         assert_eq!(challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
     }
     #[test]
-    fn request_checksum_matches_the_client_timestamp_encoding(){
-        assert_eq!(checksum("synthetic-machine",1_790_000_000_000),"9cbI1oq_synthetic-machine");
-    }
-    #[test]
     fn forbidden_requests_are_not_reported_as_expired_credentials(){
         let response=ureq::Response::new(403,"Forbidden","private-response").unwrap();
         let(message,wait)=http_error(ureq::Error::Status(403,response));
@@ -283,6 +273,28 @@ mod tests {
         let account=Account{id:"synthetic".into(),provider:super::super::Provider::GrokBot,alias:"测试".into(),source:PathBuf::new(),slot:Some(slot.clone()),enabled:true,pinned:true};forget(&account);assert!(stored_session(&slot).is_err());
     }
     #[test]
+    fn usage_contract_does_not_send_a_fabricated_machine_checksum() {
+        use std::io::{BufRead,BufReader,Read,Write};use std::net::TcpListener;
+        let listener=TcpListener::bind("127.0.0.1:0").unwrap();let url=format!("http://{}/usage",listener.local_addr().unwrap());
+        let worker=std::thread::spawn(move||{
+            let(mut stream,_)=listener.accept().unwrap();stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut reader=BufReader::new(&mut stream);let mut headers=String::new();
+            loop {let mut line=String::new();assert!(reader.read_line(&mut line).unwrap()>0);if line=="\r\n"{break;}headers.push_str(&line.to_ascii_lowercase());}
+            let size:usize=headers.lines().find_map(|line|line.strip_prefix("content-length:")).unwrap().trim().parse().unwrap();
+            let mut body=vec![0;size];reader.read_exact(&mut body).unwrap();assert_eq!(body,b"{}");
+            assert!(headers.contains("authorization: bearer synthetic-token"));
+            for header in ["connect-protocol-version: 1","x-cursor-client-type: sand","x-cursor-client-version: 0.1.0","x-sand-box-namespace: prod","x-ghost-mode: true","x-request-id: "] {assert!(headers.contains(header),"{header}");}
+            let (status,body)=if headers.contains("x-cursor-checksum:") {("403 Forbidden","synthetic contract rejection".to_string())}
+                else {("200 OK",json!({"usagePercent":15.5,"hasNonZeroIncludedLimit":true,"grokPlanLabel":"Test","currentPeriodStart":"2030-01-01T00:00:00Z","nextResetTimestampUtc":"2030-01-08T00:00:00Z"}).to_string())};
+            write!(stream,"HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+        });
+        let result=usage_request(&ureq::AgentBuilder::new().try_proxy_from_env(false).build(),&url,"synthetic-token");
+        worker.join().unwrap();
+        let snapshot=parse(&read_json(result.expect("usage request must omit the machine checksum")).unwrap()).unwrap();
+        assert_eq!(snapshot.windows[0].remaining,84.5);assert_eq!(snapshot.windows[0].seconds,Some(604800));
+    }
+
+    #[test]
     fn request_is_a_read_only_rpc_and_errors_never_echo_the_body(){
         use std::io::{BufRead,BufReader,Read,Write};use std::net::TcpListener;
         let listener=TcpListener::bind("127.0.0.1:0").unwrap();let url=format!("http://{}/aiserver.v1.DashboardService/GetSandUsageStatus",listener.local_addr().unwrap());
@@ -295,7 +307,7 @@ mod tests {
             let length=request.lines().find_map(|line|line.strip_prefix("content-length:").map(|v|v.trim().parse::<usize>().unwrap())).unwrap();
             let mut body=vec![0;length];reader.read_exact(&mut body).unwrap();assert_eq!(body,b"{}");
             assert!(request.starts_with("post /aiserver.v1.dashboardservice/getsandusagestatus "));assert!(request.contains("authorization: bearer synthetic-token"));assert!(request.contains("connect-protocol-version: 1"));
-            assert!(request.contains("x-cursor-checksum: "));assert!(request.contains("x-request-id: "));
+            assert!(!request.contains("x-cursor-checksum:"));assert!(request.contains("x-request-id: "));
             stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 24\r\nConnection: close\r\n\r\nsecret-that-must-not-echo").unwrap();
         });
         let error=usage_request(&ureq::AgentBuilder::new().build(),&url,"synthetic-token").unwrap_err();let(message,wait)=http_error(error);assert!(message.contains("401"));assert!(!message.contains("secret-that-must-not-echo"));assert_eq!(wait,0);server.join().unwrap();
