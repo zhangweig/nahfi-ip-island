@@ -86,6 +86,8 @@ fn replace_file(tmp:&Path,path:&Path)->std::io::Result<()> {
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub settings_theme: crate::settings_theme::SettingsTheme,
+    /// 0 = automatic; otherwise extra zoom relative to Windows DPI.
+    pub ui_scale_percent: u32,
     pub ip_enabled: bool,
     /// 0 = direct; otherwise an HTTP CONNECT proxy on loopback.
     pub ip_proxy_port: u16,
@@ -93,8 +95,8 @@ pub struct Settings {
     pub pet: bool,
     pub minimal: bool,
     pub browser_minimal: bool,
-    pub visible_pages: [bool; 8],
-    pub page_order: [usize; 8],
+    pub visible_pages: [bool; crate::app::PAGE_COUNT],
+    pub page_order: [usize; crate::app::PAGE_COUNT],
     pub show_battery: bool,
     pub resident_order: Vec<usize>,
     pub system_hud: bool,
@@ -125,7 +127,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { ip_enabled: true, ip_proxy_port: 0, ip_interval: 60, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; 8], page_order: [0,1,2,3,4,5,6,7], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
+        Self { ui_scale_percent: 0, ip_enabled: true, ip_proxy_port: 0, ip_interval: 60, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, visible_pages: [true; crate::app::PAGE_COUNT], page_order: [0,1,2,3,4,5,6,7,8,9], show_battery: true, resident_order: Vec::new(), system_hud: true, read_notifications:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
     }
 }
 
@@ -135,6 +137,7 @@ impl Settings {
         for (k, v) in read_kv(&config_dir().join("settings.txt")) {
             match k.as_str() {
                 "settings_theme" => s.settings_theme=crate::settings_theme::SettingsTheme::parse(&v),
+                "ui_scale_percent" => s.ui_scale_percent = v.parse::<u32>().ok().map(|n|if n==0{0}else{n.clamp(75,250)}).unwrap_or(0),
                 "ip_enabled" => s.ip_enabled = v != "0",
                 "ip_proxy_port" => s.ip_proxy_port = v.parse().unwrap_or(0),
                 "ip_interval" => s.ip_interval = v.parse::<u32>().unwrap_or(60).clamp(15, 3600),
@@ -147,13 +150,14 @@ impl Settings {
                 }
                 "page_order" => {
                     if let Ok(order)=v.split(',').map(str::parse::<usize>).collect::<Result<Vec<_>,_>>() {
-                        if order.len()==8 && (0..8).all(|page|order.contains(&page)) {
-                            s.page_order.copy_from_slice(&order);
+                        if (6..=crate::app::PAGE_COUNT).contains(&order.len()) && (0..order.len()).all(|page|order.contains(&page)) {
+                            let count=order.len();
+                            s.page_order[..count].copy_from_slice(&order);
                         }
                     }
                 }
                 "show_battery" => s.show_battery = v != "0",
-                "visible_pages" if (6..=8).contains(&v.len()) && v.bytes().all(|b| b==b'0' || b==b'1') => {
+                "visible_pages" if (6..=crate::app::PAGE_COUNT).contains(&v.len()) && v.bytes().all(|b| b==b'0' || b==b'1') => {
                     for (enabled,value) in s.visible_pages.iter_mut().zip(v.bytes()) { *enabled=value==b'1'; }
                     for enabled in &mut s.visible_pages[v.len()..]{*enabled=v.bytes().any(|b|b==b'1');}
                 }
@@ -189,6 +193,7 @@ impl Settings {
         let _ = write_kv(
             &config_dir().join("settings.txt"),
             &[
+                ("ui_scale_percent".into(), self.ui_scale_percent.to_string()),
                 ("ip_enabled".into(), (self.ip_enabled as u8).to_string()),
                 ("ip_proxy_port".into(), self.ip_proxy_port.to_string()),
                 ("ip_interval".into(), self.ip_interval.to_string()),

@@ -6,6 +6,14 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+/// Screenshot-safe display; full addresses are only exposed by explicit UI actions.
+pub fn masked_ip(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(ip) => { let b=ip.octets(); format!("{}.***.***.{}",b[0],b[3]) },
+        IpAddr::V6(ip) => format!("{:x}:****:****:****",ip.segments()[0]),
+    }
+}
+
 pub const ENDPOINT: &str = "https://ipwho.is/";
 
 #[derive(Clone, Debug, PartialEq, Eq)]

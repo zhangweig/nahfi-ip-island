@@ -1,6 +1,5 @@
 use crate::{
     app::{App, Cmd},
-    bar_layout::{self, Layout},
     paint::{Card, H},
     theme::{self, W},
 };
@@ -8,137 +7,130 @@ use eframe::egui;
 
 impl App {
     pub(crate) fn ip_settings(&mut self, ui: &mut egui::Ui) {
-        ui.checkbox(&mut self.settings.ip_enabled, "启用 IP Monitor");
-        ui.label("独立检测 ipwho.is 的请求出口，每次查询会向该服务发送请求。");
+        ui.checkbox(&mut self.settings.ip_enabled, "启用 IP Monitor 后台检测");
+        ui.label("完整 IP 默认隐藏；主动显示后 10 秒自动隐藏，切页或收起时立即隐藏。");
         ui.horizontal(|ui| {
-            ui.label("本地 HTTP / mixed 代理端口（0 = 直连）");
+            ui.label("本机 HTTP / mixed 代理端口（0 = 直连）");
             ui.add(egui::DragValue::new(&mut self.settings.ip_proxy_port).range(0..=65535));
         });
         ui.horizontal(|ui| {
             ui.label("刷新间隔（秒）");
             ui.add(egui::DragValue::new(&mut self.settings.ip_interval).range(15..=3600));
         });
-        ui.label("例如 Clash mixed-port 7890。仅支持本机 HTTP CONNECT 代理，失败不回退直连。");
-        ui.label("检测结果仅代表查询接口的出口，不代表所有网站或 Clash 节点名称。");
-    }
-    pub(crate) fn ip_bar(&mut self, c: &Card, cx: f32, layout: &Layout, expansion: f32) {
-        let Some(x) = layout.x[bar_layout::IP] else {
-            return;
-        };
-        let x = cx + x;
-        let card = c.faded(1.0 - expansion);
-        if let Some(image) = flag(self.ip.code()) {
-            egui::Image::new(image)
-                .tint(egui::Color32::from_white_alpha(
-                    ((1.0 - expansion) * 255.0) as u8,
-                ))
-                .paint_at(c.ui, card.rect(x - 24.0, 9.0, 18.0, 12.0));
-        } else {
-            card.text(
-                x - 15.0,
-                21.0,
-                "◎",
-                14.0,
-                W::Regular,
-                theme::GRAY,
-                H::Center,
-            );
-        }
-        let color = if self.ip.error.is_some() {
-            theme::YELLOW
-        } else {
-            theme::WHITE
-        };
-        card.text(
-            x + 10.0,
-            21.0,
-            self.ip.code(),
-            12.0,
-            W::Bold,
-            color,
-            H::Center,
-        );
-        if self.ip.error.is_some() {
-            card.circle(x + 25.0, 8.0, 2.0, theme::YELLOW);
-        }
-        if expansion < 0.5
-            && c.hit(x - 26.0, 0.0, 52.0, 30.0, "ip-bar")
-                .on_hover_text("IP Monitor · 点击查看出口详情")
-                .clicked()
-        {
-            self.ip_details = true;
-        }
+        ui.label("例如 Clash mixed-port 7890。仅支持本机 HTTP CONNECT，失败不回退直连。");
+        ui.label("查询使用 ipwho.is；结果仅代表该接口的出口，不代表所有网站或节点名称。");
     }
     pub(crate) fn ip_panel(&mut self, c: &Card, cmds: &mut Vec<Cmd>) {
-        c.text(
-            16.0,
-            25.0,
-            "IP Monitor",
-            14.5,
-            W::Bold,
-            theme::WHITE,
-            H::Left,
-        );
-        c.text(
-            313.0,
-            24.0,
-            "设置",
-            11.0,
-            W::Regular,
-            theme::GRAY,
-            H::Center,
-        );
-        if c.hit(291.0, 4.0, 44.0, 26.0, "ip-settings").clicked() {
-            self.settings_tab = 10;
-            self.open_settings();
+        if !self.settings.ip_enabled {
+            c.text(
+                44.0,
+                66.0,
+                "IP 检测已关闭",
+                14.0,
+                W::Semibold,
+                theme::GRAY,
+                H::Left,
+            );
+            c.text(
+                44.0,
+                91.0,
+                "点击右上角设置启用后台检测",
+                11.0,
+                W::Regular,
+                theme::GRAY,
+                H::Left,
+            );
+            self.ip_reveal_until = 0.0;
+            return;
         }
-        c.text(
-            365.0,
-            24.0,
-            "返回",
-            11.0,
-            W::Regular,
-            theme::GRAY,
-            H::Center,
-        );
-        if c.hit(340.0, 4.0, 57.0, 26.0, "ip-back").clicked() {
-            self.ip_details = false;
+        let revealed = self.open && self.t < self.ip_reveal_until;
+        if revealed {
+            c.ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(100));
         }
         if let Some(o) = &self.ip.last_success {
             if let Some(image) = flag(&o.country_code) {
-                egui::Image::new(image).paint_at(c.ui, c.rect(16.0, 40.0, 24.0, 16.0));
+                egui::Image::new(image).paint_at(c.ui, c.rect(44.0, 39.0, 24.0, 16.0));
             }
             let country = c.fit(
                 &format!("{} · {}", o.country_code, o.country),
-                12.0,
+                11.0,
                 W::Semibold,
-                340.0,
+                298.0,
             );
             c.text(
-                48.0,
+                76.0,
                 54.0,
                 &country,
-                12.0,
+                11.0,
                 W::Semibold,
                 theme::WHITE,
                 H::Left,
             );
-            let ip = o.ip.to_string();
-            c.text(16.0, 78.0, &ip, 14.0, W::Bold, theme::CYAN, H::Left);
-            if c.hit(12.0, 60.0, 390.0, 22.0, "ip-copy")
-                .on_hover_text("点击复制公网 IP")
+            let shown = if revealed {
+                o.ip.to_string()
+            } else {
+                crate::ip_monitor::masked_ip(o.ip)
+            };
+            let shown = c.fit(&shown, 13.0, W::Bold, 255.0);
+            c.text(44.0, 78.0, &shown, 13.0, W::Bold, theme::CYAN, H::Left);
+            c.text(
+                375.0,
+                78.0,
+                if revealed { "隐藏" } else { "显示" },
+                11.0,
+                W::Semibold,
+                theme::CYAN,
+                H::Right,
+            );
+            if c.hit(330.0, 60.0, 47.0, 23.0, "ip-reveal")
+                .on_hover_text("主动显示完整 IP，10 秒后自动打码")
                 .clicked()
             {
-                cmds.push(Cmd::Copy(ip));
+                self.ip_reveal_until = if revealed { 0.0 } else { self.t + 10.0 };
             }
-            let date: chrono::DateTime<chrono::Local> =
-                self.ip.attempted_at.unwrap_or(o.checked_at).into();
             c.text(
-                16.0,
+                298.0,
+                120.0,
+                "复制完整 IP",
+                10.0,
+                W::Semibold,
+                theme::CYAN,
+                H::Right,
+            );
+            if c.hit(237.0, 104.0, 65.0, 23.0, "ip-copy")
+                .on_hover_text("主动复制完整 IP 到剪贴板")
+                .clicked()
+            {
+                cmds.push(Cmd::Copy(o.ip.to_string()));
+            }
+        } else {
+            c.text(
+                44.0,
+                65.0,
+                if self.ip.refreshing {
+                    "正在检测出口…"
+                } else {
+                    "暂无出口信息"
+                },
+                13.0,
+                W::Semibold,
+                theme::GRAY,
+                H::Left,
+            );
+        }
+        let at = self
+            .ip
+            .attempted_at
+            .or_else(|| self.ip.last_success.as_ref().map(|o| o.checked_at));
+        if let Some(at) = at {
+            let at: chrono::DateTime<chrono::Local> = at.into();
+            c.text(
+                44.0,
                 120.0,
                 &format!(
-                    "最近检测 {}{}",
-                    date.format("%m-%d %H:%M:%S"),
+                    "检测 {}{}",
+                    at.format("%H:%M:%S"),
                     if self.ip.error.is_some() {
                         " · 旧结果"
                     } else {
@@ -150,34 +142,6 @@ impl App {
                 theme::GRAY,
                 H::Left,
             );
-        } else {
-            c.text(
-                16.0,
-                65.0,
-                if self.ip.refreshing {
-                    "正在检测出口…"
-                } else {
-                    "暂无出口信息"
-                },
-                14.0,
-                W::Semibold,
-                theme::GRAY,
-                H::Left,
-            );
-        }
-        if self.ip.last_success.is_none() {
-            if let Some(at) = self.ip.attempted_at {
-                let at: chrono::DateTime<chrono::Local> = at.into();
-                c.text(
-                    16.0,
-                    120.0,
-                    &format!("最近检测 {}", at.format("%m-%d %H:%M:%S")),
-                    10.0,
-                    W::Regular,
-                    theme::GRAY,
-                    H::Left,
-                );
-            }
         }
         let route = crate::ip_monitor::Config::from_settings(&self.settings).route();
         let status = if self.ip.refreshing {
@@ -187,14 +151,14 @@ impl App {
         } else if self.ip.last_success.is_some() {
             format!("{route} · 查询成功")
         } else {
-            format!("{route} · 等待首次检测")
+            format!("{route} · 等待检测")
         };
-        let text = c.fit(&status, 10.0, W::Regular, 385.0);
+        let text = c.fit(&status, 9.0, W::Regular, 330.0);
         c.text(
-            16.0,
-            99.0,
+            44.0,
+            98.0,
             &text,
-            10.0,
+            9.0,
             W::Regular,
             if self.ip.error.is_some() {
                 theme::YELLOW
@@ -203,9 +167,11 @@ impl App {
             },
             H::Left,
         );
+        c.hit(43.0, 84.0, 333.0, 18.0, "ip-status")
+            .on_hover_text(format!("{status}\n仅代表 ipwho.is 查询出口。"));
         c.text(
-            368.0,
-            121.0,
+            375.0,
+            120.0,
             if self.ip.refreshing {
                 "检测中"
             } else {
@@ -214,15 +180,11 @@ impl App {
             11.0,
             W::Semibold,
             theme::CYAN,
-            H::Center,
+            H::Right,
         );
-        if !self.ip.refreshing && c.hit(338.0, 103.0, 62.0, 28.0, "ip-refresh").clicked() {
+        if !self.ip.refreshing && c.hit(326.0, 104.0, 50.0, 23.0, "ip-refresh").clicked() {
             self.ip_refresh = true;
         }
-        c.hit(12.0, 84.0, 395.0, 20.0, "ip-status")
-            .on_hover_text(format!(
-                "{status}\n仅代表 ipwho.is 查询出口，不代表所有网站。"
-            ));
     }
 }
 // Bundled country-flag-icons 1.6.20 (MIT), see assets/flags/LICENSE.

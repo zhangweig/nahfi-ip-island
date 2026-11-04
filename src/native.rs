@@ -205,6 +205,20 @@ impl Window {
         Some(Self { hwnd, region: (0, 0, 0, 0), expanded: false, hook, browser_state:(None,PollClock::default()), drag_capture:DragCapture::default() })
     }
 
+    pub fn monitor_rect(&self)->Option<eframe::egui::Rect> {
+        use windows::Win32::Graphics::Gdi::{MonitorFromWindow,GetMonitorInfoW,MONITORINFO,MONITOR_DEFAULTTONEAREST};
+        let mut info=MONITORINFO{cbSize:std::mem::size_of::<MONITORINFO>() as u32,..Default::default()};
+        unsafe {
+            if !GetMonitorInfoW(MonitorFromWindow(self.hwnd,MONITOR_DEFAULTTONEAREST),&mut info).as_bool(){return None;}
+        }
+        let r=info.rcMonitor;
+        Some(eframe::egui::Rect::from_min_max(eframe::egui::pos2(r.left as f32,r.top as f32),eframe::egui::pos2(r.right as f32,r.bottom as f32)))
+    }
+    pub fn position_top(&self,monitor:eframe::egui::Rect,ppp:f32) {
+        let x=monitor.left()+(monitor.width()-crate::app::WIN_W*ppp)/2.0;
+        unsafe {let _=SetWindowPos(self.hwnd,None,x.round() as i32,monitor.top().round() as i32,0,0,SWP_NOACTIVATE|SWP_NOSIZE|SWP_NOZORDER);}
+    }
+
     pub fn browser_at_top(&mut self)->Option<bool> {
         if self.browser_state.1.ready(Duration::from_millis(100)) {
             self.browser_state=(crate::system::browser_at_top(self.hwnd),PollClock::now());

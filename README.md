@@ -1,45 +1,61 @@
 # Nahfi IP Island
 
-基于 [岛仔 Daozai](https://github.com/Renly1994/xiaotang-daozai) 的 Windows 灵动岛，增加独立的 **IP Monitor**。沿用 Rust + egui，保留音乐、日程、托盘等原有功能。
+基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.48**。
 
 ## 下载 Windows x64
 
-- [直接下载 EXE](https://raw.githubusercontent.com/zhangweig/nahfi-ip-island/main/downloads/v0.6.47-ip.1/Nahfi-IP-Island.exe)
-- [下载完整 ZIP（含说明和许可证）](https://raw.githubusercontent.com/zhangweig/nahfi-ip-island/main/downloads/v0.6.47-ip.1/Nahfi-IP-Island-windows-x64.zip)
-- [SHA-256 校验文件](downloads/v0.6.47-ip.1/SHA256SUMS.txt)
+- [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.48/Nahfi-IP-Island.exe)
+- [完整 ZIP（含使用说明和许可证）](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.48/Daozai-v0.6.48-windows-x64.zip)
+- [版本说明与 SHA-256](downloads/v0.6.48/RELEASE_NOTES.md)
 
-## IP Monitor 使用
+## 功能页面
 
-- 默认启用，启动后悬停展开显示 IP 详情；顶部常规药丸增加国旗和两位国家代码。
-- 点击药丸 IP 区域或展开页右上角的 `IP` 可回到详情；`返回`恢复原有功能页。
-- 详情显示公网 IPv4/IPv6、国家、查询路径、检测状态与时间。点击 IP 复制，点击 `刷新`立即检测。
-- 在详情的 `设置` → `IP Monitor` 中配置本机 HTTP / mixed 代理端口，例：Clash 的 `7890`。`0` 表示不指定代理，默认每 60 秒刷新，可配置 15–3600 秒。
-- 请求失败会保留并标记旧结果；更改查询路径会立即清除旧结果。失败后不会从代理回退到直连。
-- 查询在后台线程执行，8 秒超时，不阻塞动画。关闭开关后不再发起新请求；已发出的请求可能在超时前完成，其结果会被丢弃。
-- 极简模式、歌词模式与系统临时通知仍沿用上游的显示优先级；IP 入口位于常规药丸中。
+音乐、专注、饮水、置物架、待办、邮箱、AI 额度、日程、**键鼠电量**和 **IP Monitor** 是同级页面，可通过左右箭头、滚轮和底部页码切换，在「设置 → 页面管理」中开关及排序。升级会保留旧页面顺序与开关，新页面追加在末尾。
 
-查询使用 `https://ipwho.is/`，每次会向该服务暴露该请求的出口 IP。**结果仅代表访问该查询接口的出口，不代表所有网站的出口，也不是 Clash 当前节点名称。** 国家信息依赖服务商数据库。支持本机 HTTP CONNECT 代理，不支持 SOCKS-only 端口、代理认证或 Clash 控制 API。
+### 键鼠电量
+
+持续显示已连接蓝牙键盘和鼠标的名称、电量百分比和电量条，每两秒更新。低于或等于 20% 用黄色标示；设备未向 Windows 上报电量时明确显示“电量未知”。支持多设备分页。
+
+目前使用 Windows 通用蓝牙电量属性。**USB 2.4G 接收器暂未适配**，其电量通常需要厂商协议；连接方式、设备与驱动是否上报电量会影响可用性。
+
+### IP Monitor 与隐私
+
+IP Monitor 已独立成同级功能页，不再覆盖音乐主页面，也不占用收起药丸。
+
+- 默认打码公网 IP：IPv4 例如 `203.***.***.7`，IPv6 仅显示首段。
+- 点击“显示”主动查看，10 秒后自动隐藏；切页、收起后隐藏。
+- 只有点击“复制完整 IP”才会把原文放入剪贴板。
+- 显示国家、请求路径、检测状态与时间，支持手动刷新。
+- 页面右上角设置中可配置本机 HTTP / mixed 代理端口，例 `7890`；`0` 为不指定代理。刷新间隔为 15–3600 秒，默认 60 秒。
+- 代理请求失败不回退直连，旧结果明确标记；查询在后台运行，8 秒超时。
+
+查询接口为 `https://ipwho.is/`，每次请求会向该服务暴露出口 IP。结果仅代表访问该接口的出口，不代表所有网站，也不是 Clash 当前节点名称。不支持 SOCKS-only 端口或代理认证。
+
+### 4K / 高 DPI
+
+默认自动结合屏幕物理分辨率和 Windows DPI 决定界面缩放：4K 屏在 Windows 100% 下放大至约 2×，Windows 已设为 200% 时不再重复放大。显示设置或 DPI 改变时重新计算窗口尺寸、顶部居中位置和原生鼠标命中区域。
+
+「设置 → 常规 → 屏幕与缩放」可关闭自动模式，设置 Windows DPI 基础上的额外缩放（75%–250%），立即生效。
 
 ## 构建与验证
 
-Windows 安装 Rust stable 和 Visual Studio C++ Build Tools，然后在仓库根目录执行：
+Windows 安装 Rust stable 和 Visual Studio C++ Build Tools，在仓库根目录运行：
 
 ```powershell
 cargo test --locked --all-targets --features record -- --test-threads=1
 cargo build --locked --release --bin daozai
-.	arget
-elease\daozai.exe
+.\target\release\daozai.exe
 ```
 
-只验证 IP 功能：`cargo test --locked --lib ip_`。测试使用本地 HTTP 服务，不依赖公网 IP 查询服务；涵盖响应验证、IPv6、请求失败、保留旧结果、布局、配置与面板操作。Linux 可用于编译和无窗口测试，Windows 托盘、开机启动和真实代理出口仍需在 Windows 验证。
+新增测试覆盖页面导航、旧配置迁移、键鼠电量与未知状态、IP 打码/复制/超时和多 DPI 交互。Linux 全量测试中两个原始上游已复现的失败为日历字体间距、Windows 凭据保存；排除后其余测试通过。Windows 交叉编译成功不代表已在 Windows 实机验证，仍需实机核验具体设备及混合 DPI 多屏行为。
 
 ## 来源与许可证
 
-上游基线：`Renly1994/xiaotang-daozai`，提交 `0d52f42cacc145d6ec7e32be8414b7944475cd63`（0.6.47）。保留上游 MIT [许可证](LICENSE)和第三方声明。
+上游基线：[Renly1994/xiaotang-daozai](https://github.com/Renly1994/xiaotang-daozai)，提交 `0d52f42cacc145d6ec7e32be8414b7944475cd63`（0.6.47）。保留 MIT [许可证](LICENSE)和第三方声明。
 
-国旗来自 `country-flag-icons` 1.6.20，按 npm 发布元数据的 SHA-512 验证后打包为本地 SVG，许可见 [assets/flags/LICENSE](assets/flags/LICENSE)。不会额外联网加载国旗。
+国旗来自 `country-flag-icons` 1.6.20（MIT），按 npm 发布元数据的 SHA-512 校验后本地打包，见 [assets/flags/LICENSE](assets/flags/LICENSE)。
 
-本分支的更新来源指向 `zhangweig/nahfi-ip-island`，尚未发布版本时“检查更新”可能返回未找到发布版本。下面保留上游文档供参考；其中上游下载链接不包含 IP Monitor。
+下面保留上游文档供参考；其中上游下载地址不包含本分支的改动。
 
 ---
 

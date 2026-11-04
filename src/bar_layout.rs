@@ -9,8 +9,7 @@ pub(crate) const MUSIC: usize = 6;
 pub(crate) const FOCUS: usize = 7;
 pub(crate) const BELL: usize = 8;
 pub(crate) const PET: usize = 9;
-pub(crate) const IP: usize = 10;
-const WIDTHS: [f32; 11] = [44.0,20.0,27.0,27.0,27.0,22.0,14.0,crate::focus_bar::WIDTH,20.0,32.0,52.0];
+const WIDTHS: [f32; 10] = [44.0,20.0,27.0,27.0,27.0,22.0,14.0,crate::focus_bar::WIDTH,20.0,32.0];
 
 pub(crate) const DEFAULT_ORDER: [usize;6]=[BATTERY,PET,CLOCK,QUOTA,MUSIC,FOCUS];
 pub(crate) fn valid_order(order:&[usize])->bool {
@@ -33,13 +32,13 @@ pub(crate) fn animations_enabled()->bool {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Layout {
     pub width: f32,
-    pub x: [Option<f32>; 11],
+    pub x: [Option<f32>; 10],
 }
 
 impl Layout {
     pub fn new(battery:bool,quotas:usize,music:bool,focus:bool,bell:bool,pet:bool)->Self {
         fn place(cursor:&mut f32,width:f32)->f32 {let x=*cursor+width/2.0;*cursor+=width+12.0;x}
-        let mut x=[None;11];let mut cursor=16.0;
+        let mut x=[None;10];let mut cursor=16.0;
         let count=quotas.min(3);
         let order=if battery {[BATTERY,CLOCK,QUOTA]}else{[QUOTA,CLOCK,BATTERY]};
         for slot in order {
@@ -64,12 +63,6 @@ impl Layout {
         let width=cursor-12.0+16.0;
         for value in x.iter_mut().flatten() {*value-=width/2.0;}
         Self {width:width.max(96.0),x}
-    }
-    pub fn with_ip(&mut self) {
-        let extra = WIDTHS[IP] + 12.0;
-        for x in self.x.iter_mut().flatten() { *x -= extra / 2.0; }
-        self.x[IP] = Some(self.width / 2.0 + 12.0 + WIDTHS[IP]/2.0 - extra/2.0 - 16.0);
-        self.width += extra;
     }
     pub fn reorder(&mut self,order:&[usize]) {
         if !valid_order(order){return;}
@@ -100,11 +93,11 @@ impl Layout {
 
 pub(crate) struct Motion {
     pub target: Layout,
-    positions: [Spring; 11],
+    positions: [Spring; 10],
     initialized: bool,
 }
 impl Default for Motion {
-    fn default()->Self {Self {target:Layout::new(false,0,false,false,false,false),positions:[Spring::new(0.0,360.0,0.76);11],initialized:false}}
+    fn default()->Self {Self {target:Layout::new(false,0,false,false,false,false),positions:[Spring::new(0.0,360.0,0.76);10],initialized:false}}
 }
 impl Motion {
     pub fn step(&mut self,target:Layout,dt:f32,animate:bool) {
@@ -167,25 +160,5 @@ mod tests {
         for _ in 0..120 {motion.step(after,1.0/60.0,true);}
         assert!((motion.current().x[QUOTA].unwrap()-after.x[QUOTA].unwrap()).abs()<0.01);
         motion.step(before,1.0/60.0,false);assert_eq!(motion.current().x,before.x);
-    }
-}
-
-#[cfg(test)]
-mod ip_tests {
-    use super::*;
-    #[test]
-    fn ip_slot_keeps_all_residents_without_overlap() {
-        for count in 0..=5 {
-            let mut layout=Layout::new(true,count,true,true,true,true);
-            layout.reorder(&[FOCUS,MUSIC,QUOTA,CLOCK,PET,BATTERY]);
-            let before=layout;
-            layout.with_ip();
-            for i in 0..IP { assert_eq!(before.x[i].is_some(),layout.x[i].is_some()); }
-            let left=layout.x[IP].unwrap()-WIDTHS[IP]/2.0;
-            for (i,x) in layout.x[..IP].iter().enumerate() {
-                if let Some(x)=x { assert!(left-(x+WIDTHS[i]/2.0)>=11.9); }
-            }
-            assert!(layout.width<crate::app::WIN_W);
-        }
     }
 }

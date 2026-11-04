@@ -15,7 +15,7 @@ struct Shell {
     #[cfg(windows)]
     frame_at: Instant,
     media: smtc::Shared,
-    placed: bool,
+    display_state: Option<(f32,egui::Rect)>,
     win_x: f32,
     sys: (Option<u8>, bool, PollClock),
     #[cfg(windows)]
@@ -59,7 +59,6 @@ struct Shell {
 impl Shell {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let mut app = App::new(&cc.egui_ctx, Options::default());
-        app.open_ip_monitor();
         #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
         if !quota_demo{app.quota_initialize();}
@@ -95,7 +94,7 @@ impl Shell {
             #[cfg(windows)]
             frame_at: Instant::now(),
             media,
-            placed: false,
+            display_state: None,
             win_x: 0.0,
             sys: (None, false, PollClock::default()),
             #[cfg(windows)]
@@ -156,6 +155,29 @@ impl Shell {
         if let Some(t) = &self.tray {
             t.sync(tray::State { pet: self.app.settings.pet, minimal: self.app.settings.minimal, autostart: self.autostart });
         }
+    }
+
+    // Returns true while a new egui zoom waits to take effect on the next frame.
+    fn sync_display(&mut self,ctx:&egui::Context)->bool {
+        let ppp=ctx.pixels_per_point();
+        let fallback=ctx.input(|i|i.viewport().monitor_size).map(|size|egui::Rect::from_min_size(egui::Pos2::ZERO,size*ppp));
+        #[cfg(windows)] let monitor=self.native.as_ref().and_then(|n|n.monitor_rect()).or(fallback);
+        #[cfg(not(windows))] let monitor=fallback;
+        let Some(monitor)=monitor else{return false;};
+        let native=ctx.input(|i|i.viewport().native_pixels_per_point).unwrap_or(1.0);
+        let zoom=daozai::display::zoom(monitor.height(),native,self.app.settings.ui_scale_percent);
+        if (ctx.zoom_factor()-zoom).abs()>0.005 {
+            ctx.set_zoom_factor(zoom);ctx.request_repaint();self.display_state=None;return true;
+        }
+        if self.display_state!=Some((ppp,monitor)) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(app::CANVAS_W,app::WIN_H)));
+            self.win_x=monitor.left()/ppp+(monitor.width()/ppp-app::WIN_W)/2.0;
+            #[cfg(windows)] if let Some(native)=&self.native{native.position_top(monitor,ppp);}
+            #[cfg(not(windows))] ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(self.win_x,monitor.top()/ppp)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            self.display_state=Some((ppp,monitor));
+        }
+        false
     }
 
     fn env(&mut self, ctx: &egui::Context) -> Env {
@@ -238,14 +260,7 @@ impl eframe::App for Shell {
             }
         }
         if config.enabled { ctx.request_repaint_after(Duration::from_secs(1)); }
-        if !self.placed {
-            if let Some(mon) = ctx.input(|i| i.viewport().monitor_size) {
-                self.placed = true;
-                self.win_x = ((mon.x - app::WIN_W) / 2.0).round();
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(self.win_x, 0.0)));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-            }
-        }
+        if self.sync_display(ctx) { return; }
         #[cfg(windows)]
         {
             while let Ok(observation)=self.system_rx.try_recv(){

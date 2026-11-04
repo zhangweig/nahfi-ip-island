@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn settings_groups_keep_every_page_reachable() {
-        let groups = ["常规", "音乐与歌词", "专注与饮水", "专注与饮水", "待办与置物", "待办与置物", "通知、邮箱与日程", "通知、邮箱与日程", "通知、邮箱与日程", "关于", "页面管理", "AI 额度"];
+        let groups = ["常规", "音乐与歌词", "专注与饮水", "专注与饮水", "待办与置物", "待办与置物", "通知、邮箱与日程", "通知、邮箱与日程", "通知、邮箱与日程", "关于", "页面管理", "AI 额度", "设备与 IP", "设备与 IP"];
         for (tab, expected) in groups.iter().enumerate() {
             let matches: Vec<_> = SETTINGS_GROUPS.iter().filter(|(_,start,end)| (*start..=*end).contains(&tab)).collect();
             assert_eq!(matches.len(), 1, "页面 {tab} 必须且只能属于一个分组");
@@ -762,9 +762,9 @@ fn setting_choices(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;3],uni
         });
     });
 }
-const SETTINGS_GROUPS: [(&str,usize,usize);8] = [
+const SETTINGS_GROUPS: [(&str,usize,usize);9] = [
     ("常规",0,0), ("页面管理",10,10), ("音乐与歌词",1,1), ("专注与饮水",2,3),
-    ("待办与置物",4,5), ("通知、邮箱与日程",6,8), ("AI 额度",11,11), ("关于",9,9),
+    ("待办与置物",4,5), ("通知、邮箱与日程",6,8), ("AI 额度",11,11), ("设备与 IP",12,13), ("关于",9,9),
 ];
 
 impl App {
@@ -855,12 +855,20 @@ impl App {
                 egui::ScrollArea::vertical().id_salt(("settings-scroll",self.settings_tab)).auto_shrink([false,false]).show(ui,|ui|{
                     match self.settings_tab {
                     11=>self.quota_settings(ui),
+                    12=>{
+                        settings_label(ui,"键鼠电量");
+                        settings_card(ui,|ui|{
+                            ui.label("在功能页中持续显示已连接蓝牙键盘和鼠标的电量，每两秒更新。");
+                            ui.label("百分比取决于 Windows 和设备是否上报；未上报时显示未知，不推测电量。");
+                            ui.label("USB 2.4G 接收器暂未适配，部分型号需要厂商专用协议。");
+                        });
+                    }
+                    13=>{settings_label(ui,"IP Monitor");settings_card(ui,|ui|self.ip_settings(ui));}
+
                     10=>{
                         ui.label(egui::RichText::new("选择需要的页面和状态组件。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                         settings_label(ui,"常驻排列");
                         settings_card(ui,|ui|self.resident_order_settings(ui));
-                        settings_label(ui,"IP Monitor");
-                        settings_card(ui,|ui|self.ip_settings(ui));
                         settings_label(ui,"状态组件");
                         settings_card(ui,|ui|{
                             setting_row(ui,"电量","本机电量、充电状态与提醒；无电池设备自动隐藏",&mut self.settings.show_battery);
@@ -869,7 +877,7 @@ impl App {
                         });
                         settings_label(ui,"功能页面");
                         settings_card(ui,|ui|{
-                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","饮水记录与提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程"];
+                            let descriptions=["播放控制与同步歌词","番茄钟与休息计时","饮水记录与提醒","临时收纳文件位置","任务清单与到期提醒","邮件摘要与验证码","Agent 剩余额度和账号切换","月历、邮件邀请与工作日程","蓝牙键盘、鼠标电量百分比","公网 IP、出口国家与隐私保护"];
                             ui.label(egui::RichText::new("拖动左侧手柄调整顺序，松开后自动应用到岛。").size(11.5).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
                             #[derive(Clone)]
                             struct PageDrag(usize);
@@ -940,6 +948,13 @@ impl App {
                             let mut a=autostart;
                             setting_row(ui,"开机启动","登录 Windows 时自动打开岛仔",&mut a);
                             if a!=autostart{self.pending.push(Cmd::ToggleAutostart);}
+                        });
+                        settings_label(ui,"屏幕与缩放");
+                        settings_card(ui,|ui|{
+                            let mut automatic=self.settings.ui_scale_percent==0;
+                            if ui.checkbox(&mut automatic,"自动适配屏幕（含 4K）").changed(){self.settings.ui_scale_percent=if automatic{0}else{100};}
+                            if !automatic { ui.horizontal(|ui|{ui.label("在系统 DPI 基础上的额外缩放（%）");ui.add(egui::DragValue::new(&mut self.settings.ui_scale_percent).range(75..=250).speed(5));}); }
+                            ui.label("自动模式兼顾屏幕分辨率和 Windows 缩放，不重复放大；手动调整立即生效。");
                         });
                         settings_label(ui,"岛体显示");
                         settings_card(ui,|ui|{

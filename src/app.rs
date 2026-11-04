@@ -23,6 +23,10 @@ use std::path::PathBuf;
 pub const PW: f32 = 419.0; // 展开面板宽
 pub const PH: f32 = 140.0; // 展开面板高
 pub(crate) const CALENDAR_PAGE: usize = 7;
+pub const DEVICES_PAGE: usize = 8;
+pub const IP_PAGE: usize = 9;
+pub const PAGE_COUNT: usize = 10;
+const PAGE_SETTINGS: [usize; PAGE_COUNT] = [1,2,3,5,4,7,11,8,12,13];
 pub(crate) const CALENDAR_H: f32 = 216.0;
 pub const BAR_W: f32 = 163.0; // 收起药丸宽
 pub const BAR_H: f32 = 30.0; // 收起药丸高
@@ -38,7 +42,7 @@ pub const RAD: f32 = 33.0; // 底部圆角
 pub const WIN_W: f32 = 640.0; // 窗口（透明画布）
 pub const CANVAS_W: f32 = WIN_W + 640.0; // 为右侧通知预留透明画布，原岛仍按 WIN_W 定位。
 pub const WIN_H: f32 = 270.0;
-pub(crate) const PAGE_NAMES: [&str; 8] = ["音乐", "专注", "饮水", "置物架", "待办", "邮箱", "AI 额度", "日程"];
+pub(crate) const PAGE_NAMES: [&str; PAGE_COUNT] = ["音乐", "专注", "饮水", "置物架", "待办", "邮箱", "AI 额度", "日程", "键鼠电量", "IP Monitor"];
 
 // ---------- 动效参数 ----------
 /// 悬停意图缓冲：光标停留这么久才真正展开（期间药丸轻微胀大作为反馈），防误触。
@@ -297,7 +301,8 @@ pub struct App {
     pub settings: model::Settings,
     pub ip: crate::ip_monitor::State,
     pub ip_refresh: bool,
-    pub(crate) ip_details: bool,
+    pub(crate) ip_reveal_until: f64,
+    pub(crate) devices_first: usize,
     pub(crate) todos: model::TodoList,
     pub(crate) water: model::Water,
     pub(crate) shelf: model::Shelf,
@@ -318,7 +323,7 @@ pub struct App {
     page_dir: f32,
     page_t0: f64,
     slide: Spring,
-    dots: [Spring; 8],
+    dots: [Spring; PAGE_COUNT],
     wheel_delta: f32,
     wheel_at: f64,
     wheel_page_at: f64,
@@ -442,7 +447,8 @@ impl App {
             settings,
             ip: Default::default(),
             ip_refresh: false,
-            ip_details: false,
+            ip_reveal_until: 0.0,
+            devices_first: 0,
             todos: model::TodoList::load(),
             water: model::Water::default(),
             shelf: model::Shelf::load(),
@@ -904,12 +910,12 @@ impl App {
         self.system_idle.unwrap_or(self.t - self.last_input)
     }
 
-    pub fn open_ip_monitor(&mut self) { self.ip_details = true; }
+    pub fn open_ip_monitor(&mut self) { self.show_page(IP_PAGE); }
 
     pub fn show_page(&mut self,page:usize) {
-        self.ip_details = false;
+        self.ip_reveal_until = 0.0;
         if !self.settings.visible_pages[page] {
-            self.settings_tab=[1,2,3,5,4,7,11,8][page];
+            self.settings_tab=PAGE_SETTINGS[page];
             self.open_settings();
             return;
         }
@@ -965,7 +971,7 @@ impl App {
 
     /// 带过渡地切到某页。`dir` > 0 表示内容从右侧进入。
     pub(crate) fn go(&mut self, page: usize, dir: f32) {
-        self.ip_details = false;
+        self.ip_reveal_until = 0.0;
         if page == self.page || !self.settings.visible_pages[page] { return; }
         self.subpage=None;
         // 连点：上一段过渡还没结束时，以当前页为起点重新开始，位移速度保留。
@@ -1128,6 +1134,7 @@ impl App {
         }
         let mut cmds = Vec::new();
 
+        if !self.open { self.ip_reveal_until = 0.0; }
         self.tick(env, dt, elapsed);
         self.sync_device(env);
         self.tick_alerts();
@@ -1144,7 +1151,6 @@ impl App {
         self.resident_power=(env.battery,env.charging);
         let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.quota_bar_indices().len(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled());
         layout.reorder(&self.settings.resident_order);
-        if self.settings.ip_enabled { layout.with_ip(); }
         if self.pet_enabled() {
             if let Some(a)=self.notice.as_ref().filter(|_|!self.compact_notices()&&!self.open){layout.x[bar::PET]=Some(22.0-(self.notice_size(a).0+self.pet_space())/2.0);}
             else if self.island_lyrics_active() {layout.x[bar::PET]=Some(60.0-self.lyric_bar_width()/2.0);}
@@ -1533,7 +1539,6 @@ impl App {
         let pcx=local_cx+layout.x[bar::CLOCK].unwrap()-base.text_w(&clock,size::PILL_CLOCK,W::Bold)/2.0;
 
         if self.effective_minimal() && self.t>=self.notification_bell_until && p < 0.02 { return; }
-        if self.settings.ip_enabled { self.ip_bar(base, local_cx, &layout, m); }
         // 电池：位置/大小连续插值
         let bk = lerp(1.0, 0.8, m);
         let bpos = (lerp(pb.0, hb.0, m), lerp(pb.1, hb.1, m));
@@ -1600,16 +1605,11 @@ impl App {
     // 面板主体：页标题 + 页面（带切页过渡）+ 翻页箭头 + 页码豆
     // ---------------------------------------------------------------
     fn panel_body(&mut self, c: &Card, env: &Env, cmds: &mut Vec<Cmd>) {
-        if self.settings.ip_enabled {
-            if self.ip_details { self.ip_panel(c, cmds); return; }
-            if c.hit(328.0,4.0,46.0,25.0,"ip-open").on_hover_text("IP Monitor").clicked() { self.ip_details=true; }
-            c.text(350.0,22.0,"IP",11.0,W::Bold,theme::CYAN,H::Center);
-        }
         let settings=c.hit(380.0,4.0,28.0,28.0,"page-settings").on_hover_text(format!("打开{}设置窗口",PAGE_NAMES[self.page]));
         let (hover,press)=c.hover_t(&settings);
         c.circle(394.0,18.0,13.0,Color32::from_white_alpha((hover*24.0) as u8));
         paint::gear(&c.scaled(394.0,18.0,0.8*(1.0-press*0.08)),394.0,18.0,paint::mix(theme::GRAY,theme::WHITE,hover));
-        if settings.clicked(){self.settings_tab=[1,2,3,5,4,7,11,8][self.page];self.open_settings();}
+        if settings.clicked(){self.settings_tab=PAGE_SETTINGS[self.page];self.open_settings();}
         if self.subpage==Some(self.page) {
             c.text(15.0,25.0,"‹",19.0,W::Bold,theme::WHITE,H::Left);
             c.text(37.0,25.0,if self.page==2{"饮水设置"}else{"专注设置"},size::TITLE,W::Bold,theme::WHITE,H::Left);
@@ -1644,6 +1644,8 @@ impl App {
         let base = 25.0;
         let (a, b, col) = match page {
             0 | CALENDAR_PAGE => return,
+            DEVICES_PAGE => ("键鼠", "电量", theme::GREEN),
+            IP_PAGE => ("IP ", "Monitor", theme::CYAN),
             1 => ("番茄", "专注", theme::RED_TOP),
             2 => ("饮水", "提醒", theme::BLUE),
             3 => ("置物架", "", theme::WHITE),
@@ -1707,6 +1709,8 @@ impl App {
             5 => self.page_mail(c, env, cmds),
             6 => self.page_quota(c),
             CALENDAR_PAGE => self.page_calendar(c,env),
+            DEVICES_PAGE => self.page_devices(c,env),
+            IP_PAGE => self.ip_panel(c,cmds),
             _ => self.page_settings(c),
         }
     }
