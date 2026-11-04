@@ -12,14 +12,14 @@ impl App {
             .iter()
             .filter(|d| matches!(d.kind, DeviceKind::Keyboard | DeviceKind::Mouse))
             .collect();
-        if !env.bt_ready || devices.is_empty() {
+        if devices.is_empty() {
             c.text(
                 44.0,
                 65.0,
-                if env.bt_ready {
-                    "未检测到已连接的蓝牙键鼠"
+                if env.bt_ready || env.usb_ready {
+                    "未检测到支持的键鼠或 USB 接收器"
                 } else {
-                    "正在扫描蓝牙键鼠…"
+                    "正在扫描键鼠…"
                 },
                 12.0,
                 W::Semibold,
@@ -29,7 +29,7 @@ impl App {
             c.text(
                 44.0,
                 88.0,
-                "设备需向 Windows 上报电量；USB 2.4G 暂未适配",
+                "支持蓝牙、K75 Lite 和已适配的 VXE R1 接收器",
                 10.0,
                 W::Regular,
                 theme::GRAY,
@@ -79,15 +79,15 @@ impl App {
             }
             c.hit(42.0, y, 334.0, 29.0, ("peripheral", &device.id))
                 .on_hover_text(if level.is_some() {
-                    format!("{} · Windows 上报电量", device.name)
+                    format!("{} · 电量读取成功", device.name)
                 } else {
-                    format!("{} · Windows 未上报电量", device.name)
+                    format!("{} · 电量未知：可能休眠、驱动占用或协议不匹配", device.name)
                 });
         }
         c.text(
             44.0,
             126.0,
-            "蓝牙 · 每 2 秒更新 · 未上报则显示未知",
+            "蓝牙 2 秒 / USB 15 秒 · 无有效响应则未知",
             9.0,
             W::Regular,
             theme::GRAY,

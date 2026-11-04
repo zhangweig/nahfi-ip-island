@@ -448,6 +448,7 @@ fn main() {
             volume: Some((62, false)),
             bt: Vec::new(),
             bt_ready: true,
+            usb_ready: false,
         };
 
         let mut vp = egui::ViewportInfo::default();

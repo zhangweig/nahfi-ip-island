@@ -3,8 +3,8 @@ on:
   push:
     branches: [main]
     paths:
-      - downloads/v0.6.48/Nahfi-IP-Island.exe
-      - downloads/v0.6.48/Daozai-v0.6.48-windows-x64.zip
+      - downloads/v0.6.49/Nahfi-IP-Island.exe
+      - downloads/v0.6.49/Daozai-v0.6.49-windows-x64.zip
   workflow_dispatch:
 permissions:
   contents: write
@@ -20,15 +20,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.6.48
+          tag=v0.6.49
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release already exists; keeping its assets unchanged."
             exit 0
           fi
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
-            --title 'Nahfi IP Island v0.6.48 — 键鼠电量、IP 隐私与 4K 适配' \
-            --notes-file downloads/v0.6.48/RELEASE_NOTES.md \
-            downloads/v0.6.48/Nahfi-IP-Island.exe \
-            downloads/v0.6.48/Daozai-v0.6.48-windows-x64.zip \
-            downloads/v0.6.48/SHA256SUMS.txt
+            --title 'Nahfi IP Island v0.6.49 — K75 Lite 与 VXE R1 接收器适配' \
+            --notes-file downloads/v0.6.49/RELEASE_NOTES.md \
+            downloads/v0.6.49/Nahfi-IP-Island.exe \
+            downloads/v0.6.49/Daozai-v0.6.49-windows-x64.zip \
+            downloads/v0.6.49/SHA256SUMS.txt

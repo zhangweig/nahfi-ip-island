@@ -40,6 +40,9 @@ struct Shell {
     #[cfg(windows)]
     bt_rx: Option<std::sync::mpsc::Receiver<Vec<daozai::bt::Device>>>,
     bt: Vec<daozai::bt::Device>,
+    usb_rx: std::sync::mpsc::Receiver<Vec<daozai::bt::Device>>,
+    usb: Vec<daozai::bt::Device>,
+    usb_ready: bool,
     bt_ready: bool,
     volume_quiet: PollClock,
     /// v0.5.5：邮件收信服务（工作线程），以及上次同步给它的账号/开关快照。
@@ -114,6 +117,9 @@ impl Shell {
             #[cfg(windows)]
             bt_rx: Some(daozai::bt::spawn()),
             bt: Vec::new(),
+            usb_rx: daozai::usb_battery::spawn(cc.egui_ctx.clone()),
+            usb: Vec::new(),
+            usb_ready: false,
             bt_ready: false,
             volume_quiet: PollClock::default(),
             mail: daozai::mail::Service::start(),
@@ -217,8 +223,9 @@ impl Shell {
                 #[cfg(windows)] { self.system_state.volume }
                 #[cfg(not(windows))] { None }
             },
-            bt: self.bt.clone(),
+            bt: self.bt.iter().chain(&self.usb).cloned().collect(),
             bt_ready: self.bt_ready,
+            usb_ready: self.usb_ready,
         }
     }
 }
@@ -260,6 +267,7 @@ impl eframe::App for Shell {
             }
         }
         if config.enabled { ctx.request_repaint_after(Duration::from_secs(1)); }
+        while let Ok(devices)=self.usb_rx.try_recv(){self.usb=devices;self.usb_ready=true;}
         if self.sync_display(ctx) { return; }
         #[cfg(windows)]
         {

@@ -858,9 +858,9 @@ impl App {
                     12=>{
                         settings_label(ui,"键鼠电量");
                         settings_card(ui,|ui|{
-                            ui.label("在功能页中持续显示已连接蓝牙键盘和鼠标的电量，每两秒更新。");
+                            ui.label("支持蓝牙键鼠，以及 KZZI K75 Lite / 已匹配 VXE R1 系列 USB 接收器。");
                             ui.label("百分比取决于 Windows 和设备是否上报；未上报时显示未知，不推测电量。");
-                            ui.label("USB 2.4G 接收器暂未适配，部分型号需要厂商专用协议。");
+                            ui.label("USB 接收器每 15 秒查询；休眠、驱动占用或不匹配时显示未知。K75 Lite 电量适配为实验性。");
                         });
                     }
                     13=>{settings_label(ui,"IP Monitor");settings_card(ui,|ui|self.ip_settings(ui));}

@@ -98,6 +98,7 @@ pub struct Env {
     pub bt: Vec<crate::bt::Device>,
     /// 蓝牙服务是否已经完成首次扫描。
     pub bt_ready: bool,
+    pub usb_ready: bool,
 }
 
 impl Env {
@@ -892,17 +893,18 @@ impl App {
             }
         }
         if !env.bt_ready { return; }
+        let bluetooth:Vec<_>=env.bt.iter().filter(|d|!d.id.starts_with("usb:")).cloned().collect();
         // 只把首次完整扫描作为基线，之后的连接变化都应提示。
         if !self.bt_initialized {
             self.bt_initialized = true;
-            self.bt_shown = env.bt.clone();
+            self.bt_shown = bluetooth.clone();
             return;
         }
-        let connected: Vec<_> = env.bt.iter().filter(|d| !self.bt_shown.iter().any(|old| old.id == d.id)).cloned().collect();
-        let disconnected: Vec<_> = self.bt_shown.iter().filter(|d| !env.bt.iter().any(|new| new.id == d.id)).cloned().collect();
+        let connected: Vec<_> = bluetooth.iter().filter(|d| !self.bt_shown.iter().any(|old| old.id == d.id)).cloned().collect();
+        let disconnected: Vec<_> = self.bt_shown.iter().filter(|d| !bluetooth.iter().any(|new| new.id == d.id)).cloned().collect();
         for device in &connected { self.bluetooth_alert(device, true); }
         for device in &disconnected { self.bluetooth_alert(device, false); }
-        self.bt_shown = env.bt.clone();
+        self.bt_shown = bluetooth.clone();
     }
 
     /// 距离上次交互的秒数（小精灵出现的依据）。

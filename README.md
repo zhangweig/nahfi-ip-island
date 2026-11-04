@@ -1,12 +1,12 @@
 # Nahfi IP Island
 
-基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.48**。
+基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.49**。
 
 ## 下载 Windows x64
 
-- [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.48/Nahfi-IP-Island.exe)
-- [完整 ZIP（含使用说明和许可证）](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.48/Daozai-v0.6.48-windows-x64.zip)
-- [版本说明与 SHA-256](downloads/v0.6.48/RELEASE_NOTES.md)
+- [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.49/Nahfi-IP-Island.exe)
+- [完整 ZIP（含使用说明和许可证）](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.49/Daozai-v0.6.49-windows-x64.zip)
+- [版本说明与 SHA-256](downloads/v0.6.49/RELEASE_NOTES.md)
 
 ## 功能页面
 
@@ -16,7 +16,14 @@
 
 持续显示已连接蓝牙键盘和鼠标的名称、电量百分比和电量条，每两秒更新。低于或等于 20% 用黄色标示；设备未向 Windows 上报电量时明确显示“电量未知”。支持多设备分页。
 
-目前使用 Windows 通用蓝牙电量属性。**USB 2.4G 接收器暂未适配**，其电量通常需要厂商协议；连接方式、设备与驱动是否上报电量会影响可用性。
+蓝牙读取 Windows 通用电量属性。0.6.49 增加以下 **USB 2.4G 实验性适配**，每 15 秒查询：
+
+| 型号 | 接收器匹配 | 状态 |
+| --- | --- | --- |
+| KZZI K75 Lite | `3554:FA09`，接口 1 / FF02:0002，额外核对设备身份 | 协议已接入，公开参考仅确认连接检测，电量需实机验证 |
+| VXE R1 系列 | `3554:F58A` 或 `373B:1085`，接口 1 / FF02:0002 | 协议已接入；不同子型号、接收器和固件需实机验证 |
+
+只发送已知读取请求，不修改 DPI、灯效、配对或固件。接收器在但设备休眠、驱动占用、响应校验失败时显示未知，不推测百分比。建议退出官方驱动、唤醒设备后等待 15 秒。其他接收器不会被探测。详见 [USB 适配说明](docs/USB_BATTERY.md)。
 
 ### IP Monitor 与隐私
 

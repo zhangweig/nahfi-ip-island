@@ -258,6 +258,8 @@ struct H {
     animating:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
     bt: Vec<crate::bt::Device>,
+    bt_ready: bool,
+    usb_ready: bool,
     media: crate::smtc::NowPlaying,
     power: (Option<u8>, bool),
     network: Option<bool>,
@@ -274,7 +276,7 @@ impl H {
         std::env::set_var("DAOZAI_DATA_DIR", &dir);
         let ctx = egui::Context::default();
         let app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 1e9 });
-        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,animating:false,shapes:Vec::new(), bt:Vec::new(),media:Default::default(),power:(None,false),network:None,system_idle:None,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
+        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,animating:false,shapes:Vec::new(), bt:Vec::new(),bt_ready:true,usb_ready:false,media:Default::default(),power:(None,false),network:None,system_idle:None,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
     }
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
@@ -294,7 +296,8 @@ impl H {
             date: "10月28日 周三".into(),
             cursor: self.cursor,
             bt: self.bt.clone(),
-            bt_ready: true,
+            bt_ready: self.bt_ready,
+            usb_ready: self.usb_ready,
             media:self.media.clone(),
             battery:self.power.0,
             charging:self.power.1,
@@ -3514,7 +3517,7 @@ fn peripherals_page_shows_live_percent_unknown_and_connection_changes() {
     let text=|h:&H|h.shapes.iter().filter_map(|s|match &s.shape{egui::Shape::Text(t)=>Some(t.galley.text().to_owned()),_=>None}).collect::<Vec<_>>().join("|");
     assert!(text(&h).contains("85%"));assert!(text(&h).contains("电量未知"));
     h.bt[0].battery=Some(19);h.frame(vec![]);assert!(text(&h).contains("19%"));
-    h.bt.clear();h.frame(vec![]);assert!(text(&h).contains("未检测到已连接的蓝牙键鼠"));
+    h.bt.clear();h.frame(vec![]);assert!(text(&h).contains("未检测到支持的键鼠或 USB 接收器"));
 }
 
 #[test]
@@ -3548,4 +3551,18 @@ fn new_pages_remain_interactive_at_high_dpi_and_privacy_resets_on_navigation() {
         let leaked=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text().contains("2001:db8::1234")));
         assert!(!leaked,"切页再回来必须恢复打码");
     }
+}
+
+#[test]
+fn receiver_battery_works_without_bluetooth_and_does_not_raise_bluetooth_alerts() {
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.bt_ready=false;h.usb_ready=true;
+    h.app.show_page(crate::app::DEVICES_PAGE);
+    h.bt=vec![crate::bt::Device{id:"usb:synthetic".into(),name:"KZZI K75 Lite · USB 2.4G".into(),battery:Some(75),kind:crate::bt::DeviceKind::Keyboard}];
+    h.hover(H::local(200.0,40.0),1.0);
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="75%")));
+    h.bt_ready=true;h.bt.clear();h.frame(vec![]);
+    h.bt.push(crate::bt::Device{id:"usb:mouse".into(),name:"VXE R1 系列 · USB 2.4G".into(),battery:None,kind:crate::bt::DeviceKind::Mouse});
+    h.frame(vec![]);
+    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="电量未知")));
+    assert!(!h.app.notice.as_ref().is_some_and(|a|a.title=="蓝牙设备"));
 }
