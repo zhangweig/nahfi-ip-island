@@ -3362,7 +3362,7 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                 viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(1.0),..Default::default()})).collect(),..Default::default()};
             *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
         });
-        for tab in 0..12 {
+        for tab in 0..14 {
             h.app.settings_tab=tab;
             for frame in 0..3 {
                 h.ctx.data_mut(|d|d.insert_temp(egui::Id::new("settings-system-theme"),(std::time::Instant::now(),system)));
@@ -3565,4 +3565,34 @@ fn receiver_battery_works_without_bluetooth_and_does_not_raise_bluetooth_alerts(
     h.frame(vec![]);
     assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="电量未知")));
     assert!(!h.app.notice.as_ref().is_some_and(|a|a.title=="蓝牙设备"));
+}
+
+#[test]
+fn device_and_ip_settings_are_clickable_from_music_settings_at_each_dpi() {
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    fn frame(h:&mut H,scale:f32,events:Vec<egui::Event>) {
+        let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
+        h.t+=0.02;let time=h.t;
+        egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport| {
+            let id=viewport.ids.this;
+            let raw=egui::RawInput{viewport_id:id,time:Some(time),screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(690.0,560.0))),events:events.clone(),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(scale),..Default::default()})).collect(),..Default::default()};
+            *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
+        });
+        let root=egui::RawInput{time:Some(time),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(scale),..Default::default()})).collect(),..Default::default()};
+        let _=h.ctx.run(root,|ctx|h.app.settings_ui(ctx,false));
+        h.shapes=output.lock().unwrap().take().unwrap().shapes;
+    }
+    fn click(h:&mut H,scale:f32,label:&str) {
+        for _ in 0..3{frame(h,scale,vec![]);}
+        let p=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t) if t.galley.text()==label=>Some(t.visual_bounding_rect().center()),_=>None}).unwrap_or_else(||panic!("未找到设置按钮：{label}"));
+        frame(h,scale,vec![egui::Event::PointerMoved(p)]);
+        for pressed in [true,false]{frame(h,scale,vec![egui::Event::PointerButton{pos:p,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()}]);}
+    }
+    for scale in [1.0,1.5,2.0,2.5] {
+        let mut h=H::new();h.ctx.set_embed_viewports(false);h.app.settings_tab=1;h.app.open_settings();
+        click(&mut h,scale,"设备与 IP");assert_eq!(h.app.settings_tab,12);
+        click(&mut h,scale,"IP Monitor");assert_eq!(h.app.settings_tab,13);
+        click(&mut h,scale,"键鼠电量");assert_eq!(h.app.settings_tab,12);
+        click(&mut h,scale,"音乐与歌词");assert_eq!(h.app.settings_tab,1);
+    }
 }

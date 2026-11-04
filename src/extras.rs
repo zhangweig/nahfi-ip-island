@@ -499,6 +499,8 @@ mod tests {
     #[test]
     fn settings_groups_keep_every_page_reachable() {
         let groups = ["常规", "音乐与歌词", "专注与饮水", "专注与饮水", "待办与置物", "待办与置物", "通知、邮箱与日程", "通知、邮箱与日程", "通知、邮箱与日程", "关于", "页面管理", "AI 额度", "设备与 IP", "设备与 IP"];
+        assert_eq!(groups.len(),SETTINGS_TITLES.len());
+        for (_,start,end) in SETTINGS_GROUPS {assert!(start<=end && end<SETTINGS_TITLES.len());}
         for (tab, expected) in groups.iter().enumerate() {
             let matches: Vec<_> = SETTINGS_GROUPS.iter().filter(|(_,start,end)| (*start..=*end).contains(&tab)).collect();
             assert_eq!(matches.len(), 1, "页面 {tab} 必须且只能属于一个分组");
@@ -762,6 +764,8 @@ fn setting_choices(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;3],uni
         });
     });
 }
+const SETTINGS_TITLES: [&str;14] = ["常规","音乐与歌词","专注","饮水","待办","置物","通知","邮箱","日程","关于","页面管理","AI 额度","键鼠电量","IP Monitor"];
+
 const SETTINGS_GROUPS: [(&str,usize,usize);9] = [
     ("常规",0,0), ("页面管理",10,10), ("音乐与歌词",1,1), ("专注与饮水",2,3),
     ("待办与置物",4,5), ("通知、邮箱与日程",6,8), ("AI 额度",11,11), ("设备与 IP",12,13), ("关于",9,9),
@@ -832,8 +836,8 @@ impl App {
                 ui.visuals_mut().widgets.hovered.corner_radius=egui::CornerRadius::same(6);
                 ui.visuals_mut().widgets.active.corner_radius=egui::CornerRadius::same(6);
                 ui.visuals_mut().selection.bg_fill=settings_color(ctx,Color32::from_rgb(45,105,165),Color32::from_rgb(209,226,248));
-                let titles=["常规","音乐与歌词","专注","饮水","待办","置物","通知","邮箱","日程","关于","页面管理","AI 额度"];
-                ui.label(egui::RichText::new(titles[self.settings_tab.min(11)]).size(18.0).strong().color(settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))));
+                let titles=&SETTINGS_TITLES;
+                ui.label(egui::RichText::new(titles.get(self.settings_tab).copied().unwrap_or("设置")).size(18.0).strong().color(settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))));
                 if let Some((_,start,end))=SETTINGS_GROUPS.iter().find(|(_,start,end)|(*start..=*end).contains(&self.settings_tab)) {
                     if start!=end {
                         ui.add_space(7.0);
@@ -842,7 +846,7 @@ impl App {
                             ui.horizontal(|ui|{
                                 for index in *start..=*end {
                                     let selected=self.settings_tab==index;
-                                    let button=egui::Button::new(egui::RichText::new(titles[index]).size(12.0).color(if selected{settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))}else{settings_color(ctx,Color32::from_gray(210),Color32::from_gray(55))}))
+                                    let button=egui::Button::new(egui::RichText::new(titles.get(index).copied().unwrap_or("设置")).size(12.0).color(if selected{settings_color(ctx,Color32::WHITE,Color32::from_rgb(30,34,41))}else{settings_color(ctx,Color32::from_gray(210),Color32::from_gray(55))}))
                                         .fill(if selected{settings_color(ctx,Color32::from_rgb(70,70,74),Color32::from_rgb(205,215,229))}else{Color32::TRANSPARENT})
                                         .stroke(egui::Stroke::NONE).corner_radius(6.0);
                                     if ui.add_sized([68.0,26.0],button).clicked(){self.settings_tab=index;}

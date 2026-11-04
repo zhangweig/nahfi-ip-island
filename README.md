@@ -1,12 +1,12 @@
 # Nahfi IP Island
 
-基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.49**。
+基于岛仔 Daozai 的 Rust + egui Windows 桌面灵动岛。当前版本 **0.6.50**。
 
 ## 下载 Windows x64
 
-- [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.49/Nahfi-IP-Island.exe)
-- [完整 ZIP（含使用说明和许可证）](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.49/Daozai-v0.6.49-windows-x64.zip)
-- [版本说明与 SHA-256](downloads/v0.6.49/RELEASE_NOTES.md)
+- [直接下载 EXE](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.50/Nahfi-IP-Island.exe)
+- [完整 ZIP（含使用说明和许可证）](https://github.com/zhangweig/nahfi-ip-island/releases/download/v0.6.50/Daozai-v0.6.50-windows-x64.zip)
+- [版本说明与 SHA-256](downloads/v0.6.50/RELEASE_NOTES.md)
 
 ## 功能页面
 
